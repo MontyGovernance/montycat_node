@@ -1,0 +1,13 @@
+.vscode/
+.history/
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
+*.tmp
+*.log
+
+dist/
+.DS_Store**
+node_modules/
+package-lock.json
