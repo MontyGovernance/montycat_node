@@ -1,5 +1,5 @@
 {
-  "name": "montycat_node",
+  "name": "montycat",
   "version": "1.0.2",
   "description": "A Node.js client for MontyCat, NoSQL store utilizing Data Mesh architecture.",
   "type": "module",
