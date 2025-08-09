@@ -279,6 +279,25 @@ class GenericKV {
     }
 
     /**
+     * Removes an enforced schema from the store.
+     * @param schema - The name of the schema to remove.
+     * @returns A promise that resolves with the result of the schema removal.
+     */
+    static async removeEnforcedSchema(schema: any): Promise<any> {
+        
+        if (!schema) {
+            throw new TypeError("Schema must be provided");
+        }
+
+        const query = {
+            raw: ["remove-enforced-schema", "store", this.store, "keyspace", this.keyspace, "persistent", this.persistent ? "y" : "n", "schema_name", schema.name],
+            credentials: [this.username, this.password],
+        };
+
+        return await runQuery(this, JSON.stringify(query));
+    }
+
+    /**
      * Shows the properties of the store.
      * @returns The current instance of GenericKV.
      */
