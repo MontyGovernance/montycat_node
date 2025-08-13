@@ -1,6 +1,6 @@
 # Montycat Node.js Client
 
-Montycat Node.js Client is the official JavaScript/TypeScript client for **Montycat**, a high-performance, distributed NoSQL store built on cutting-edge Data Mesh architecture. This package enables Node.js developers to easily connect, query, and manage data within Montycat’s decentralized, scalable environment.
+Montycat Node.js Client is the official JavaScript/TypeScript client for **Montycat**, a high-performance, NoSQL store built on cutting-edge Data Mesh architecture. This package enables Node.js developers to easily connect, query, and manage data within Montycat’s decentralized, scalable environment.
 
 ## Key Features
 - ⚡ **High Performance**: Leverages Montycat’s architecture for extremely fast reads and writes.

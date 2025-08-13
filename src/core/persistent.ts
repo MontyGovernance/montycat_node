@@ -115,7 +115,7 @@ class Persistent extends GenericKV {
         const query = {
             raw: [
                 "update-cache-compression", "store", this.store, "keyspace", this.keyspace, "persistent", "y",
-                "cache", this.cache ? this.cache : null, "compression", this.compression ? "y" : "n"
+                "cache", this.cache ? this.cache : "0", "compression", this.compression ? "y" : "n"
             ],
             credentials: [this.username, this.password],
         };
@@ -130,7 +130,7 @@ class Persistent extends GenericKV {
         const query = {
             raw: [
                 "create-keyspace", "store", this.store, "keyspace", this.keyspace, "persistent", this.persistent ? "y" : "n",
-                "cache", this.cache ? this.cache : null, "compression", this.compression ? "y" : "n"
+                "cache", this.cache ? this.cache : "0", "compression", this.compression ? "y" : "n"
             ],
             credentials: [this.username, this.password],
         };
