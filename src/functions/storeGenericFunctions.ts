@@ -88,6 +88,7 @@ function convertToBinaryQuery(cls:  any, options: { [key: string]: any } = {}) :
     const { processedBulkValues, uniqueSchema } = processBulkValues(bulkValues);
 
     const bulkKeysValuesProcessed = processBulkKeysValues(bulkKeysValues);
+    const processedSearchCriteria = processSearchCriteria(searchCriteria);
 
     return JSON.stringify({
         username: cls.username,
@@ -105,10 +106,28 @@ function convertToBinaryQuery(cls:  any, options: { [key: string]: any } = {}) :
         bulk_values:  processedBulkValues.map(v => JSON.stringify(v)),
         bulk_keys: bulkKeys,
         bulk_keys_values: bulkKeysValuesProcessed,
-        search_criteria: JSON.stringify(searchCriteria),
+        search_criteria: JSON.stringify(processedSearchCriteria),
         with_pointers: withPointers,
         schema: foundSchema ? foundSchema: uniqueSchema ? uniqueSchema : schema,
     });
+}
+
+function processSearchCriteria(searchCriteria: object[]): object {
+    const processedCriteria: { [key: string]: any } = {};
+    for (const key in searchCriteria) {
+        if (searchCriteria[key] instanceof Pointer) {
+
+            if (processedCriteria['pointers'] === undefined) {
+                processedCriteria['pointers'] = { [key]: searchCriteria[key].setupPointer() };
+            } else {
+                processedCriteria['pointers'][key] = searchCriteria[key].setupPointer();
+            }
+
+        } else {
+            processedCriteria[key] = searchCriteria[key];
+        }
+    }
+    return processedCriteria;
 }
 
 /**
