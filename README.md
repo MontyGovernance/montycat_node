@@ -13,7 +13,7 @@ Montycat Node.js Client is the official JavaScript/TypeScript client for **Monty
 - 🤝 **Simple API**: Designed for easy integration into Node.js applications with minimal setup.
 - 📚 **Well-Documented**: Clear and comprehensive documentation to get you up and running fast.
 
-Installation
+## Installation
 You can install the Node.js client for Montycat using `npm`:
 
 ```bash

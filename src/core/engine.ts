@@ -98,9 +98,9 @@ class Engine {
    * @param {boolean} [options.persistent=false] - Whether to create a persistent store.
    * @returns {Promise<unknown>} A promise that resolves with the result of the store creation.
    */
-  async createStore({ persistent = false }: { persistent?: boolean } = {}): Promise<unknown> {
+  async createStore(): Promise<unknown> {
     const rawQuery: RawQuery = {
-      raw: ['create-store', 'store', this.store!, 'persistent', persistent ? 'y' : 'n'],
+      raw: ['create-store', 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
     return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery));
@@ -112,9 +112,9 @@ class Engine {
    * @param {boolean} [options.persistent=false] - Whether to remove a persistent store.
    * @returns {Promise<unknown>} A promise that resolves with the result of the store removal.
    */
-  async removeStore({ persistent = false }: { persistent?: boolean } = {}): Promise<unknown> {
+  async removeStore(): Promise<unknown> {
     const rawQuery: RawQuery = {
-      raw: ['remove-store', 'store', this.store!, 'persistent', persistent ? 'y' : 'n'],
+      raw: ['remove-store', 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
     return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery));
@@ -126,7 +126,7 @@ class Engine {
    * @param {string} password - The password for the owner.
    * @returns {Promise<unknown>} A promise that resolves with the result of the owner creation.
    */
-  async createOwner(owner: string, password: string): Promise<unknown> {
+  async createOwner({ owner, password }: { owner: string; password: string }): Promise<unknown> {
     const rawQuery: RawQuery = {
       raw: ['create-owner', 'username', owner, 'password', password],
       credentials: [this.username!, this.password!],
@@ -134,7 +134,7 @@ class Engine {
     return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery));
   }
 
-  async removeOwner(owner: string): Promise<unknown> {
+  async removeOwner({ owner }: { owner: string }): Promise<unknown> {
     const rawQuery: RawQuery = {
       raw: ['remove-owner', 'username', owner],
       credentials: [this.username!, this.password!],
@@ -161,7 +161,7 @@ class Engine {
    * @param {string | GenericKV[] | string[] | { keyspace: string }} [keyspaces] - The keyspaces to grant permission for.
    * @returns {Promise<unknown>} A promise that resolves with the result of the grant operation.
    */
-  async grantTo(owner: string, permission: ValidPermissions, keyspaces?: string | GenericKV[] | string[] | { keyspace: string }): Promise<unknown> {
+  async grantTo({ owner, permission, keyspaces }: {owner: string, permission: ValidPermissions, keyspaces?: string | GenericKV[] | string[] | { keyspace: string }}): Promise<unknown> {
 
     const query: RawQuery = {
       raw: ['grant-to', 'owner', owner, 'permission', permission, 'store', this.store!],
@@ -198,7 +198,7 @@ class Engine {
    * @param {string | GenericKV[] | string[] | { keyspace: string }} [keyspaces] - The keyspaces to revoke permission for.
    * @returns {Promise<unknown>} A promise that resolves with the result of the revoke operation.
    */
-  async revokeFrom(owner: string, permission: ValidPermissions, keyspaces?: string | string[] | GenericKV[] | { keyspace: string }): Promise<unknown> {
+  async revokeFrom({ owner, permission, keyspaces }: { owner: string; permission: ValidPermissions; keyspaces?: string | string[] | GenericKV[] | { keyspace: string } }): Promise<unknown> {
     const validPermissions = ['read', 'write', 'all'];
 
     if (!validPermissions.includes(permission)) {
