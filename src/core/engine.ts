@@ -68,28 +68,41 @@ class Engine {
    * montycat://host/port/username/password[/store]
    */
   static fromUri(uri: string): Engine {
-    if (!uri.startsWith('montycat://')) {
+    if (!uri.startsWith("montycat://")) {
       throw new Error("URI must use 'montycat://' protocol");
     }
 
-    const parts = uri.slice('montycat://'.length).split('/');
+    const uriWithoutScheme = uri.slice("montycat://".length);
 
-    if (parts.length !== 4 && parts.length !== 5) {
-      throw new Error('Missing or extra parts in URI');
+    const [mainPart, store] = uriWithoutScheme.split("/").length > 1
+      ? [uriWithoutScheme.split("/")[0], uriWithoutScheme.split("/").slice(1).join("/")]
+      : [uriWithoutScheme, null];
+
+    const atIndex = mainPart.indexOf("@");
+    if (atIndex === -1) {
+      throw new Error("Missing '@' in URI (username:password@host:port required)");
     }
 
-    const [host, portStr, username, password, store = null] = parts;
+    const [userPass, hostPort] = [mainPart.slice(0, atIndex), mainPart.slice(atIndex + 1)];
+    const [username, password] = userPass.split(":");
+    const [host, portStr] = hostPort.split(":");
 
-    if (!host || !portStr || !username || !password) {
-      throw new Error('Host, port, username, and password must be non-empty');
+    if (!username || !password || !host || !portStr) {
+      throw new Error("Username, password, host, and port must be non-empty");
     }
 
     const port = parseInt(portStr, 10);
     if (isNaN(port)) {
-      throw new Error('Port must be an integer');
+      throw new Error("Port must be an integer");
     }
 
-    return new Engine({ host, port, username, password, store });
+    return new Engine({
+      host,
+      port,
+      username,
+      password,
+      store: store || null,
+    });
   }
 
   /**
