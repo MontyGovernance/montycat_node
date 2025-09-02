@@ -1,7 +1,6 @@
 
 import { runQuery, convertToBinaryQuery, convertCustomKey } from '../functions/storeGenericFunctions.js';
 import GenericKV from '../classes/generic.js';
-import { Schema } from './schema.js';
 
 /**
  * InMemory class that extends GenericKV for in-memory keyspace operations.
@@ -18,7 +17,13 @@ class InMemory extends GenericKV {
      */
     static async createKeyspace(): Promise<any> {
         const query = {
-            raw: ["create-keyspace", "store", this.store, "keyspace", this.keyspace, "persistent", this.persistent ? "y" : "n"],
+            raw: [
+                    "create-keyspace",
+                    "store", this.store,
+                    "keyspace", this.keyspace,
+                    "persistent", this.persistent ? "y" : "n",
+                    "distributed", this.distributed ? "y" : "n"
+                ],
             credentials: [this.username, this.password],
         };
         return await runQuery(this, JSON.stringify(query));
@@ -29,11 +34,17 @@ class InMemory extends GenericKV {
      * @returns A promise that resolves with the result of the snapshot operation.
      */
     static async doSnapshotsForKeyspace(): Promise<any> {
+
         if (this.persistent) {
             throw new Error("Snapshots are not allowed on persistent keyspaces");
         }
+
         const query = {
-            raw: ["do-snapshots-for-keyspace", "store", this.store, "keyspace", this.keyspace, "persistent", "n"],
+            raw: [
+                    "do-snapshots-for-keyspace",
+                    "store", this.store,
+                    "keyspace", this.keyspace,
+                ],
             credentials: [this.username, this.password],
         };
         return runQuery(this, JSON.stringify(query));
@@ -44,11 +55,17 @@ class InMemory extends GenericKV {
      * @returns A promise that resolves with the result of the cleanup operation.
      */
     static async cleanSnapshotsForKeyspace(): Promise<any> {
+
         if (this.persistent) {
             throw new Error("Snapshots are not allowed on persistent keyspaces");
         }
+
         const query = {
-            raw: ["clean-snapshots-for-keyspace", "store", this.store, "keyspace", this.keyspace, "persistent", "n"],
+            raw: [
+                    "clean-snapshots-for-keyspace",
+                    "store", this.store,
+                    "keyspace", this.keyspace,
+                ],
             credentials: [this.username, this.password],
         };
         return runQuery(this, JSON.stringify(query));
@@ -59,11 +76,17 @@ class InMemory extends GenericKV {
      * @returns A promise that resolves with the result of stopping snapshots.
      */
     static async stopSnapshotsForKeyspace(): Promise<any> {
+
         if (this.persistent) {
             throw new Error("Snapshots are not allowed on persistent keyspaces");
         }
+
         const query = {
-            raw: ["stop-snapshots-for-keyspace", "store", this.store, "keyspace", this.keyspace, "persistent", "n"],
+            raw: [
+                    "stop-snapshots-for-keyspace",
+                    "store", this.store,
+                    "keyspace", this.keyspace,
+                ],
             credentials: [this.username, this.password],
         };
         return runQuery(this, JSON.stringify(query));
@@ -123,7 +146,7 @@ class InMemory extends GenericKV {
         if (!effectiveKey) {
             throw new Error("No key provided");
         }
-        
+
         this.command = "update_value";
         const query = convertToBinaryQuery(this, { key: effectiveKey, value, expireSec });
         return runQuery(this, query);

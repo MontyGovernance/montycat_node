@@ -1,10 +1,9 @@
-import { Schema } from '../core/schema.js';
-import { 
-    convertCustomKey, 
-    convertCustomKeys, 
-    convertCustomKeysValues, 
-    convertToBinaryQuery, 
-    runQuery, 
+import {
+    convertCustomKey,
+    convertCustomKeys,
+    convertCustomKeysValues,
+    convertToBinaryQuery,
+    runQuery,
 } from '../functions/storeGenericFunctions.js'
 import { inspect } from 'util';
 
@@ -16,6 +15,7 @@ class GenericKV {
     static store: string = "";
     static command: string = "";
     static persistent: boolean = false;
+    static distributed: boolean = false;
     static keyspace: string;
     static username: string;
     static password: string;
@@ -232,7 +232,12 @@ class GenericKV {
      * */
     static async removeKeyspace(): Promise<any> {
         const query = {
-            raw: ["remove-keyspace", "store", this.store, "keyspace", this.keyspace],
+            raw: [
+                    "remove-keyspace",
+                    "store", this.store,
+                    "keyspace", this.keyspace,
+                    "persistent", this.persistent ? "y" : "n",
+                ],
             credentials: [this.username, this.password],
         };
         return await runQuery(this, JSON.stringify(query));
@@ -271,7 +276,14 @@ class GenericKV {
         }
 
         const query = {
-            raw: ["enforce-schema", "store", this.store, "keyspace", this.keyspace, "persistent", this.persistent ? "y" : "n", "schema_name", schema.name, "schema_content", `${JSON.stringify(schemaTypes)}`],
+            raw: [
+                    "enforce-schema",
+                    "store", this.store,
+                    "keyspace", this.keyspace,
+                    "persistent", this.persistent ? "y" : "n",
+                    "schema_name", schema.name,
+                    "schema_content", `${JSON.stringify(schemaTypes)}`
+                ],
             credentials: [this.username, this.password],
         };
 
@@ -284,13 +296,19 @@ class GenericKV {
      * @returns A promise that resolves with the result of the schema removal.
      */
     static async removeEnforcedSchema(schema: any): Promise<any> {
-        
+
         if (!schema) {
             throw new TypeError("Schema must be provided");
         }
 
         const query = {
-            raw: ["remove-enforced-schema", "store", this.store, "keyspace", this.keyspace, "persistent", this.persistent ? "y" : "n", "schema_name", schema.name],
+            raw: [
+                    "remove-enforced-schema",
+                    "store", this.store,
+                    "keyspace", this.keyspace,
+                    "persistent", this.persistent ? "y" : "n",
+                    "schema_name", schema.name
+                ],
             credentials: [this.username, this.password],
         };
 

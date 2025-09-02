@@ -112,11 +112,19 @@ class Persistent extends GenericKV {
      * @return A promise that resolves with the result of the update.
      */
     static async updateCacheAndCompression(): Promise<any> {
+
+        if (!this.persistent) {
+            throw new Error("Cache and compression settings can only be updated for persistent keyspaces.");
+        }
+
         const query = {
             raw: [
-                "update-cache-compression", "store", this.store, "keyspace", this.keyspace, "persistent", "y",
-                "cache", this.cache ? this.cache : "0", "compression", this.compression ? "y" : "n"
-            ],
+                    "update-cache-compression",
+                    "store", this.store,
+                    "keyspace", this.keyspace,
+                    "cache", this.cache ? this.cache : "0",
+                    "compression", this.compression ? "y" : "n"
+                ],
             credentials: [this.username, this.password],
         };
         return await runQuery(this, JSON.stringify(query));
@@ -129,9 +137,14 @@ class Persistent extends GenericKV {
     static async createKeyspace(): Promise<any> {
         const query = {
             raw: [
-                "create-keyspace", "store", this.store, "keyspace", this.keyspace, "persistent", this.persistent ? "y" : "n",
-                "cache", this.cache ? this.cache : "0", "compression", this.compression ? "y" : "n"
-            ],
+                    "create-keyspace",
+                    "store", this.store,
+                    "keyspace", this.keyspace,
+                    "persistent", this.persistent ? "y" : "n",
+                    "distributed", this.distributed ? "y" : "n",
+                    "cache", this.cache ? this.cache : "0",
+                    "compression", this.compression ? "y" : "n"
+                ],
             credentials: [this.username, this.password],
         };
         return await runQuery(this, JSON.stringify(query));
