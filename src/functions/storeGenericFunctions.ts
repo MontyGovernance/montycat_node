@@ -82,6 +82,10 @@ function convertToBinaryQuery(cls:  any, options: { [key: string]: any } = {}) :
         limitOutput = { start: 0, stop: 0 },
         withPointers = false,
         schema = null,
+        keyIncluded = false,
+        pointersMetadata = false,
+        volumes = [],
+        latestVolume = false,
     } = options;
 
     const { processedValue, foundSchema } = processValue(value);
@@ -109,6 +113,10 @@ function convertToBinaryQuery(cls:  any, options: { [key: string]: any } = {}) :
         search_criteria: JSON.stringify(processedSearchCriteria),
         with_pointers: withPointers,
         schema: foundSchema ? foundSchema: uniqueSchema ? uniqueSchema : schema,
+        key_included: keyIncluded,
+        pointers_metadata: pointersMetadata,
+        volumes,
+        latest_volume: latestVolume,
     });
 }
 

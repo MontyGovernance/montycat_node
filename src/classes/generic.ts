@@ -45,7 +45,12 @@ class GenericKV {
      * @param withPointers - Whether to include pointers in the retrieved value.
      * @return A promise that resolves with the retrieved value.
      */
-    static async getValue({ key = "", customKey = null, withPointers = false }: { key?: string; customKey?: string | null; withPointers?: boolean } = {}): Promise<any> {
+    static async getValue({ key = "", customKey = null, withPointers = false, keyIncluded = false, pointersMetadata = false }: { key?: string; customKey?: string | null; withPointers?: boolean; keyIncluded?: boolean; pointersMetadata?: boolean } = {}): Promise<any> {
+
+        if (pointersMetadata && withPointers) {
+            throw new Error("You select both pointers value and pointers metadata. Choose one");
+        }
+
         try {
             if (customKey) key = convertCustomKey(customKey);
 
@@ -54,7 +59,7 @@ class GenericKV {
             }
 
             this.command = "get_value";
-            const query = convertToBinaryQuery(this, { key, withPointers });
+            const query = convertToBinaryQuery(this, { key, withPointers, keyIncluded, pointersMetadata });
             return runQuery(this, query);
         } catch (err) {
             throw err;
@@ -141,7 +146,12 @@ class GenericKV {
      * @param withPointers - Whether to include pointers in the retrieved values.
      * @returns A promise that resolves with the retrieved keys.
      */
-    static async getBulk({ bulkKeys = [], bulkCustomKeys = [], limitOutput = { start: 0, stop: 0 }, withPointers = false }: { bulkKeys?: string[]; bulkCustomKeys?: string[]; limitOutput?: { start: number; stop: number }; withPointers?: boolean } = {}): Promise<any> {
+    static async getBulk({ bulkKeys = [], bulkCustomKeys = [], limitOutput = { start: 0, stop: 0 }, withPointers = false, keyIncluded = false, pointersMetadata = false }: { bulkKeys?: string[]; bulkCustomKeys?: string[]; limitOutput?: { start: number; stop: number }; withPointers?: boolean; keyIncluded?: boolean; pointersMetadata?: boolean } = {}): Promise<any> {
+        
+        if (pointersMetadata && withPointers) {
+            throw new Error("You select both pointers value and pointers metadata. Choose one");
+        }
+
         try {
             if (bulkCustomKeys.length) bulkKeys = bulkKeys.concat(convertCustomKeys(bulkCustomKeys));
 
@@ -150,7 +160,7 @@ class GenericKV {
             }
 
             this.command = "get_bulk";
-            const query = convertToBinaryQuery(this, { bulkKeys, limitOutput, withPointers });
+            const query = convertToBinaryQuery(this, { bulkKeys, limitOutput, withPointers, keyIncluded, pointersMetadata });
             return runQuery(this, query);
         } catch (err) {
             throw err;
@@ -206,10 +216,16 @@ class GenericKV {
      * @param schema - The schema to use for the lookup.
      * @return A promise that resolves with the result of the lookup.
      */
-    static async lookupValuesWhere({ searchCriteria = {}, limitOutput = { start: 0, stop: 0 }, withPointers = false, schema = null }: { searchCriteria?: { [key: string]: any }; limitOutput?: { start: number; stop: number }; withPointers?: boolean; schema?: any } = {}): Promise<any> {
+    static async lookupValuesWhere({ searchCriteria = {}, limitOutput = { start: 0, stop: 0 }, withPointers = false, schema = null, keyIncluded = false, pointersMetadata = false }: { searchCriteria?: { [key: string]: any }; limitOutput?: { start: number; stop: number }; withPointers?: boolean; schema?: any; keyIncluded?: boolean; pointersMetadata?: boolean } = {}): Promise<any> {
+
+
+        if (pointersMetadata && withPointers) {
+            throw new Error("You select both pointers value and pointers metadata. Choose one");
+        }
+
         try {
             this.command = "lookup_values";
-            const query = convertToBinaryQuery(this, { searchCriteria, limitOutput, withPointers, schema });
+            const query = convertToBinaryQuery(this, { searchCriteria, limitOutput, withPointers, schema, keyIncluded, pointersMetadata });
             return runQuery(this, query);
         } catch (err) {
             throw err;

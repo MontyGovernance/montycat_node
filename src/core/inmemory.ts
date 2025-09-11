@@ -172,9 +172,14 @@ class InMemory extends GenericKV {
      * Gets keys from the in-memory store.
      * @returns A promise that resolves with the retrieved keys.
      */
-    static async getKeys(): Promise<any> {
+    static async getKeys({ volumes = [], latestVolume = false }: { volumes?: string[], latestVolume?: boolean } = {}): Promise<any> {
+
+        if (latestVolume && volumes.length > 0) {
+            throw new Error("Select either latest volume or volumes list, not both.");
+        }
+
         this.command = "get_keys";
-        const query = convertToBinaryQuery(this);
+        const query = convertToBinaryQuery(this, { volumes, latestVolume });
         return runQuery(this, query);
     }
 };

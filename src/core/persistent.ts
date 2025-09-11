@@ -99,9 +99,14 @@ class Persistent extends GenericKV {
      * @param customKey - The custom key for the value to retrieve.
      * @return A promise that resolves with the retrieved value.
      */
-    static async getKeys({ limitOutput = { start: 0, stop: 0 } }: { limitOutput?: { start: number; stop: number } } = {}): Promise<any> {
+    static async getKeys({ limitOutput = { start: 0, stop: 0 }, latestVolume = false, volumes = [] }: { limitOutput?: { start: number; stop: number }; latestVolume?: boolean; volumes?: string[] } = {}): Promise<any> {
+
+        if (latestVolume && volumes.length > 0) {
+            throw new Error("Select either latest volume or volumes list, not both.");
+        }
+
         this.command = "get_keys";
-        const query = convertToBinaryQuery(this, { limitOutput });
+        const query = convertToBinaryQuery(this, { limitOutput, latestVolume, volumes });
         return runQuery(this, query);
     }
 
