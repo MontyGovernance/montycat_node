@@ -65,7 +65,9 @@ class Engine {
 
   /**
    * Creates an Engine instance from a URI string in the format:
-   * montycat://host/port/username/password[/store]
+   * montycat://username:password@host:port/[store]
+   * @param {string} uri - The URI string to parse.
+   * @returns {Engine} An instance of the Engine class configured with the parsed values.
    */
   static fromUri(uri: string): Engine {
     if (!uri.startsWith("montycat://")) {
@@ -264,47 +266,89 @@ class Engine {
  * @param {string} string - The string to send.
  * @returns {Promise<unknown>} A promise that resolves with the parsed response.
  */
-async function sendData(host: string, port: number, string: string): Promise<unknown> {
+type SubscriptionHandle = {
+  stop: () => void;
+};
+
+/**
+ * Sends data to a server. Supports one-time request/response or subscription.
+ * @param host - The server host.
+ * @param port - The server port.
+ * @param message - The string message to send.
+ * @param callback - Optional callback for subscription responses.
+ * @returns Promise resolving with parsed response or SubscriptionHandle.
+ */
+async function sendData(
+  host: string,
+  port: number,
+  message: string,
+  callback?: (data: unknown) => void
+): Promise<unknown | SubscriptionHandle> {
   return new Promise((resolve) => {
-    const client = new net.Socket({
-      readable: true,
-      writable: true,
-    });
-    let response = '';
+    const client = new net.Socket({ readable: true, writable: true });
+    let response = "";
+
+    let subscriptionMode = message.includes("subscribe");
+    let stopped = false;
 
     client.connect(port, host, () => {
-      client.write(string + '\n');
+      client.write(message + "\n");
+      if (subscriptionMode) {
+        resolve({
+          stop: () => {
+            stopped = true;
+            client.destroy();
+          },
+        });
+      }
     });
 
-    client.on('data', (data: Buffer) => {
+    client.on("data", (data: Buffer) => {
       response += data.toString();
-      if (response.includes('\n')) {
+
+      let parts = response.split("\n");
+      response = parts.pop() || "";
+
+      for (const part of parts) {
+        if (!part.trim()) continue;
         try {
-          const parsedResponse = recursiveParseJSON(response);
-          client.destroy();
-          resolve(parsedResponse);
+          const parsed = recursiveParseJSON(part);
+          if (subscriptionMode) {
+            if (!stopped && callback) {
+              callback(parsed);
+            }
+          } else {
+            client.destroy();
+            resolve(parsed);
+          }
         } catch (err) {
-          // Ignore parsing errors for now; handled in 'end' event
+          resolve(`Failed to parse response: ${err}`);
         }
       }
     });
 
-    client.on('end', () => {
-      try {
-        const parsedResponse = recursiveParseJSON(response);
-        resolve(parsedResponse);
-      } catch (err) {
-        resolve('Incomplete or invalid response');
+    client.on("end", () => {
+      if (!subscriptionMode) {
+        try {
+          const parsed = recursiveParseJSON(response);
+          resolve(parsed);
+        } catch {
+          resolve("Incomplete or invalid response");
+        }
       }
     });
 
-    client.on('timeout', () => {
-      resolve('Operation timed out');
+    client.on("timeout", () => {
+      if (!subscriptionMode) {
+        resolve("Operation timed out");
+      }
       client.destroy();
     });
 
-    client.on('error', (err: Error) => {
-      resolve(`Connection error: ${err.message}`);
+    client.on("error", (err: Error) => {
+      if (!subscriptionMode) {
+        resolve(`Connection error: ${err.message}`);
+      }
       client.destroy();
     });
 

@@ -203,8 +203,11 @@ function processBulkValues(bulkValues: any[]) {
  * @param query - The query string to execute.
  * @returns A promise that resolves with the result of the query.
  */
-async function runQuery(cls: any, query: string): Promise<unknown> {
-    return sendData(cls.host, cls.port, query);
+async function runQuery(cls: any, query: string, callback?: (data: any) => void, subscribe=false): Promise<unknown> {
+
+    subscribe && (cls.port = cls.port + 1);
+
+    return sendData(cls.host, cls.port, query, callback);
 }
 
 /**

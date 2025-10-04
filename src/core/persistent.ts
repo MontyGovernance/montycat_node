@@ -18,6 +18,24 @@ class Persistent extends GenericKV {
         this.keyspace = options.keyspace;
     }
 
+    static async subscribe({callback, key, customKey}: {callback?: (data: any) => void, key?: string, customKey?: string}): Promise<any> {
+
+        const effectiveKey = customKey ? convertCustomKey(customKey) : (key || null);
+
+        const queryObj = {
+            subscribe: true,
+            key: effectiveKey,
+            keyspace: this.keyspace,
+            store: this.store,
+            username: this.username,
+            password: this.password
+        }
+
+        const query = JSON.stringify(queryObj);
+        return await runQuery(this, query, callback, true);
+
+    }
+
     /**
      * Inserts a value into the persistent store.
      * @param value - The value to insert.

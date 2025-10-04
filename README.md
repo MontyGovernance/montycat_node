@@ -11,6 +11,7 @@ Montycat Node.js Client is the official JavaScript/TypeScript client for **Monty
 - 🛡️ **Robust & Stable**: Utilizes Node.js’s networking stack (net module) for reliable connections and secure data handling.
 - 📊 **Smart Data Governance**: Integrates governance features to ensure data integrity and compliance.
 - 🤝 **Simple API**: Designed for easy integration into Node.js applications with minimal setup.
+- 📡 **Subscriptions** – Supports real-time subscriptions for persistent keyspaces or individual keys.
 - 📚 **Well-Documented**: Clear and comprehensive documentation to get you up and running fast.
 
 ## Installation

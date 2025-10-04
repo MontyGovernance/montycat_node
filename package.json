@@ -1,11 +1,22 @@
 {
   "name": "montycat",
-  "version": "1.0.38",
-  "description": "A Node.js client for MontyCat, NoSQL store utilizing Data Mesh architecture.",
+  "version": "1.0.39",
+  "description": "A Node.js client for Montycat, NoSQL database utilizing Data Mesh architecture.",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "keywords": [
+    "database",
+    "nosql",
+    "sql",
+    "data-mesh",
+    "cache",
+    "lsm",
+    "key-value",
+    "realtime",
+    "montycat"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -18,7 +29,6 @@
     "start": "node dist/index.js",
     "dev": "tsc --watch"
   },
-  "keywords": [],
   "devDependencies": {
     "@types/json-bigint": "^1.0.4",
     "@types/node": "^24.1.0",
