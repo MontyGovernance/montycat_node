@@ -1,6 +1,7 @@
 import net from 'net';
 import JSONbigBase from 'json-bigint';
 import GenericKV from '../classes/generic.js';
+import tls from "tls";
 
 const JSONbig = JSONbigBase({ storeAsString: true });
 
@@ -13,6 +14,7 @@ interface EngineConfig {
   username?: string | null;
   password?: string | null;
   store?: string | null;
+  useTls?: boolean;
 }
 
 /** * Interface for raw query structure.
@@ -54,13 +56,15 @@ class Engine {
   private username: string | null;
   private password: string | null;
   private store: string | null;
+  public useTls: boolean | undefined;
 
-  constructor({ host = null, port = null, username = null, password = null, store = null }: EngineConfig = {}) {
+  constructor({ host = null, port = null, username = null, password = null, store = null, useTls = false }: EngineConfig = {}) {
     this.host = host;
     this.port = port;
     this.username = username;
     this.password = password;
     this.store = store;
+    this.useTls = useTls;
   }
 
   /**
@@ -104,6 +108,7 @@ class Engine {
       username,
       password,
       store: store || null,
+      useTls: false,
     });
   }
 
@@ -118,7 +123,7 @@ class Engine {
       raw: ['create-store', 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery));
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
   }
 
   /**
@@ -132,7 +137,7 @@ class Engine {
       raw: ['remove-store', 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery));
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
   }
 
   /**
@@ -146,7 +151,7 @@ class Engine {
       raw: ['create-owner', 'username', owner, 'password', password],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery));
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
   }
 
   async removeOwner({ owner }: { owner: string }): Promise<unknown> {
@@ -154,7 +159,7 @@ class Engine {
       raw: ['remove-owner', 'username', owner],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery));
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
   }
 
   /**
@@ -166,7 +171,7 @@ class Engine {
       raw: ['list-owners'],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery));
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
   }
 
   /**
@@ -203,7 +208,7 @@ class Engine {
       }
     }
 
-    return sendData(this.host!, this.port!, JSONbig.stringify(query));
+    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls);
   }
 
   /**
@@ -243,7 +248,7 @@ class Engine {
       }
     }
 
-    return sendData(this.host!, this.port!, JSONbig.stringify(query));
+    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls);
   }
 
   /**
@@ -251,11 +256,14 @@ class Engine {
    * @returns {Promise<unknown>} A promise that resolves with the structure of the store
    * */
   async getStructureAvailable(): Promise<unknown> {
+
+    const storePart = this.store ? ['store', this.store] : [];
+
     const rawQuery: RawQuery = {
-      raw: ['get-structure-available'],
+      raw: ['get-structure-available', ...storePart],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery));
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
   }
 }
 
@@ -282,31 +290,19 @@ async function sendData(
   host: string,
   port: number,
   message: string,
-  callback?: (data: unknown) => void
+  callback?: (data: unknown) => void,
+  useTls: boolean = false,
 ): Promise<unknown | SubscriptionHandle> {
-  return new Promise((resolve) => {
-    const client = new net.Socket({ readable: true, writable: true });
-    let response = "";
 
-    let subscriptionMode = message.includes("subscribe");
+  return new Promise((resolve, _reject) => {
+    let client: net.Socket | tls.TLSSocket;
+    let response = "";
+    const subscriptionMode = message.includes("subscribe");
     let stopped = false;
 
-    client.connect(port, host, () => {
-      client.write(message + "\n");
-      if (subscriptionMode) {
-        resolve({
-          stop: () => {
-            stopped = true;
-            client.destroy();
-          },
-        });
-      }
-    });
-
-    client.on("data", (data: Buffer) => {
+    const onData = (data: Buffer) => {
       response += data.toString();
-
-      let parts = response.split("\n");
+      const parts = response.split("\n");
       response = parts.pop() || "";
 
       for (const part of parts) {
@@ -314,9 +310,7 @@ async function sendData(
         try {
           const parsed = recursiveParseJSON(part);
           if (subscriptionMode) {
-            if (!stopped && callback) {
-              callback(parsed);
-            }
+            if (!stopped && callback) callback(parsed);
           } else {
             client.destroy();
             resolve(parsed);
@@ -325,9 +319,9 @@ async function sendData(
           resolve(`Failed to parse response: ${err}`);
         }
       }
-    });
+    };
 
-    client.on("end", () => {
+    const onEnd = () => {
       if (!subscriptionMode) {
         try {
           const parsed = recursiveParseJSON(response);
@@ -336,23 +330,61 @@ async function sendData(
           resolve("Incomplete or invalid response");
         }
       }
-    });
+    };
 
-    client.on("timeout", () => {
-      if (!subscriptionMode) {
-        resolve("Operation timed out");
-      }
+    const onError = (err: Error) => {
+      if (!subscriptionMode) resolve(`Connection error: ${err.message}`);
       client.destroy();
-    });
+    };
 
-    client.on("error", (err: Error) => {
-      if (!subscriptionMode) {
-        resolve(`Connection error: ${err.message}`);
-      }
+    const onTimeout = () => {
+      if (!subscriptionMode) resolve("Operation timed out");
       client.destroy();
-    });
+    };
 
-    client.setTimeout(120000);
+    // Function to finalize connection setup
+    const finalizeConnect = (sock: net.Socket | tls.TLSSocket) => {
+      client = sock;
+      client.on("data", onData);
+      client.on("end", onEnd);
+      client.on("error", onError);
+      client.on("timeout", onTimeout);
+      client.setTimeout(120000);
+
+      client.write(message + "\n");
+
+      if (subscriptionMode) {
+        resolve({
+          stop: () => {
+            stopped = true;
+            client.destroy();
+          },
+        });
+      }
+    };
+
+    if (useTls) {
+      const tlsSocket = tls.connect(
+        {
+          host,
+          port,
+          rejectUnauthorized: false, // for self-signed certs, enable true in prod
+        },
+        () => finalizeConnect(tlsSocket)
+      );
+
+      // Handshake timeout
+      const handshakeTimer = setTimeout(() => {
+        tlsSocket.destroy();
+        if (!subscriptionMode) resolve("TLS handshake timeout");
+      }, 10000);
+
+      tlsSocket.once("secureConnect", () => clearTimeout(handshakeTimer));
+      tlsSocket.once("error", () => clearTimeout(handshakeTimer));
+    } else {
+      const tcpSocket = new net.Socket();
+      tcpSocket.connect(port, host, () => finalizeConnect(tcpSocket));
+    }
   });
 }
 
