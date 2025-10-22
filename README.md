@@ -54,9 +54,7 @@ No adapters, no legacy baggage — just pure async data flow.
 
 Performance depends on engine deployment, network, and schema complexity, but Node.js client overhead is negligible thanks to Rust core.
 
-### When you use Montycat, you’re NOT querying a database. You’re interacting with a living data mesh that feels native to your language.
-
-## 👉 Learn more about Montycat Engine https://montygovernance.com
+## When you use Montycat, you’re NOT querying a database. You’re interacting with a living data mesh that feels native to your language. 👉 Learn more about Montycat Engine https://montygovernance.com
 
 ## Installation
 
