@@ -1,5 +1,11 @@
 # 🚀 Montycat Node.js Client — High-Performance NoSQL for the Async Era
 
+[![npm version](https://img.shields.io/npm/v/montycat.svg)](https://www.npmjs.com/package/montycat)
+[![npm downloads](https://img.shields.io/npm/dt/montycat.svg)](https://www.npmjs.com/package/montycat)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/node/v/montycat.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TS-ready-blue.svg)]()
+
 Montycat Node.js Client is the official JavaScript and TypeScript SDK for Montycat — the next-generation NoSQL engine built on Data Mesh architecture and written in Rust for blazing-fast performance. It gives Node.js developers the power to work with structured, decentralized, and secure data using a clean, asynchronous API that feels native to JavaScript — not like another bloated driver. Montycat is more than a database — it’s a redefinition of how data should feel in modern, real-time systems.
 
 ## 🧭 The Montycat Philosophy
