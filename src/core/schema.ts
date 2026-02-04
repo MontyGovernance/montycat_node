@@ -55,7 +55,7 @@ class Schema {
 
   [key: string]: any;
 
-  static metadata: Record<string, string> | null = null;
+  static metadata: Record<string, Field> | null = null;
 
   // how to check metadata type?
 
@@ -173,4 +173,32 @@ class Timestamp {
   };
 }
 
-export { Schema, Pointer, Timestamp };
+/**
+ * Field class
+ * @class
+ * @param fieldType - The type of the field
+ * @param nullable - Whether the field is nullable // default is false
+ * @returns The field object
+ * @example
+ * const field = new Field('String', true);
+ */
+class Field {
+  fieldType: string;
+  nullable: boolean;
+
+  constructor(fieldType: string, nullable: boolean = false) {
+    this.fieldType = fieldType;
+    this.nullable = nullable;
+  }
+
+  getType(): string {
+    return this.fieldType;
+  }
+
+  getNullable(): boolean {
+    return this.nullable;
+  }
+
+}
+
+export { Schema, Pointer, Timestamp, Field };

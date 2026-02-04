@@ -1,3 +1,4 @@
+import { Field } from '../core/schema.js';
 import {
     convertCustomKey,
     convertCustomKeys,
@@ -259,7 +260,6 @@ class GenericKV {
         return await runQuery(this, JSON.stringify(query));
     }
 
-    // how to make it available for TS only ?
     /**
      * Enforces a schema on the store.
      * @param schema - The schema to enforce. Should be an instance of the Schema class.
@@ -268,26 +268,27 @@ class GenericKV {
      */
     static async enforceSchema(schema: any): Promise<any> {
 
-        function parseType(fieldType: any): string {
-            switch (fieldType) {
-                case "String": return "String";
-                case "Number": return "Number";
-                case "Boolean": return "Boolean";
-                case "Array": return "Array";
-                case "Object": return "Object";
-                case "Pointer": return "Pointer";
-                case "Timestamp": return "Timestamp";
-                default: throw new TypeError(`Unsupported field type: ${fieldType}`);
+        function parseType(fieldType: Field): [string, boolean] {
+
+            switch (fieldType.getType()) {
+                case "String": return ["String", fieldType.getNullable()];
+                case "Number": return ["Number", fieldType.getNullable()];
+                case "Boolean": return ["Boolean", fieldType.getNullable()];
+                case "Array": return ["Array", fieldType.getNullable()];
+                case "Object": return ["Object", fieldType.getNullable()];
+                case "Pointer": return ["Pointer", fieldType.getNullable()];
+                case "Timestamp": return ["Timestamp", fieldType.getNullable()];
+                default: throw new TypeError(`Unsupported field type: ${fieldType.getType()}`);
             }
         }
 
-        let schemaTypes: Record<string, string> = {};
+        let schemaTypes: Record<string, [string, boolean]> = {};
 
         if (!schema.metadata) {
             throw new TypeError("Schema must have metadata");
         }
 
-        for (const [field, fieldType] of Object.entries(schema.metadata)) {
+        for (const [field, fieldType] of Object.entries(schema.metadata as Record<string, Field>)) {
             schemaTypes[field] = parseType(fieldType);
         }
 
