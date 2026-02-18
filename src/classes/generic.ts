@@ -145,10 +145,14 @@ class GenericKV {
      * @param bulkCustomKeys - An array of custom keys to retrieve.
      * @param limitOutput - An object specifying the start and stop indices for limiting output.
      * @param withPointers - Whether to include pointers in the retrieved values.
+     * @param keyIncluded - Whether to include the keys in the retrieved values.
+     * @param pointersMetadata - Whether to include metadata for the pointers in the retrieved values.
+     * @param volumes - An array of volumes to retrieve values from.
+     * @param latestVolume - Whether to retrieve values from the latest volume only.
      * @returns A promise that resolves with the retrieved keys.
      */
-    static async getBulk({ bulkKeys = [], bulkCustomKeys = [], limitOutput = { start: 0, stop: 0 }, withPointers = false, keyIncluded = false, pointersMetadata = false }: { bulkKeys?: string[]; bulkCustomKeys?: string[]; limitOutput?: { start: number; stop: number }; withPointers?: boolean; keyIncluded?: boolean; pointersMetadata?: boolean } = {}): Promise<any> {
-        
+    static async getBulk({ bulkKeys = [], bulkCustomKeys = [], limitOutput = { start: 0, stop: 0 }, withPointers = false, keyIncluded = false, pointersMetadata = false, volumes = [], latestVolume = false }: { bulkKeys?: string[]; bulkCustomKeys?: string[]; limitOutput?: { start: number; stop: number }; withPointers?: boolean; keyIncluded?: boolean; pointersMetadata?: boolean; volumes?: string[]; latestVolume?: boolean } = {}): Promise<any> {
+
         if (pointersMetadata && withPointers) {
             throw new Error("You select both pointers value and pointers metadata. Choose one");
         }
@@ -156,12 +160,18 @@ class GenericKV {
         try {
             if (bulkCustomKeys.length) bulkKeys = bulkKeys.concat(convertCustomKeys(bulkCustomKeys));
 
-            if (!bulkKeys || bulkKeys.length === 0) {
-                throw new Error("No keys provided");
+            const selectedOptions = [
+                bulkKeys.length > 0,
+                volumes.length > 0,
+                latestVolume
+            ].filter(Boolean).length;
+
+            if (selectedOptions !== 1) {
+                throw new Error("Multiple conflicting options provided. Please provide exactly one of the following: keys, volumes, or latest volume.");
             }
 
             this.command = "get_bulk";
-            const query = convertToBinaryQuery(this, { bulkKeys, limitOutput, withPointers, keyIncluded, pointersMetadata });
+            const query = convertToBinaryQuery(this, { bulkKeys, limitOutput, withPointers, keyIncluded, pointersMetadata, volumes, latestVolume });
             return runQuery(this, query);
         } catch (err) {
             throw err;
@@ -215,6 +225,8 @@ class GenericKV {
      * @param limitOutput - An object specifying the start and stop indices for limiting output.
      * @param withPointers - Whether to include pointers in the retrieved values.
      * @param schema - The schema to use for the lookup.
+     * @param keyIncluded - Whether to include the keys in the retrieved values.
+     * @param pointersMetadata - Whether to include metadata for the pointers in the retrieved values.
      * @return A promise that resolves with the result of the lookup.
      */
     static async lookupValuesWhere({ searchCriteria = {}, limitOutput = { start: 0, stop: 0 }, withPointers = false, schema = null, keyIncluded = false, pointersMetadata = false }: { searchCriteria?: { [key: string]: any }; limitOutput?: { start: number; stop: number }; withPointers?: boolean; schema?: any; keyIncluded?: boolean; pointersMetadata?: boolean } = {}): Promise<any> {
