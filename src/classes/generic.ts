@@ -226,11 +226,6 @@ class GenericKV {
      */
     static async lookupValuesWhere({ searchCriteria = {}, limitOutput = { start: 0, stop: 0 }, withPointers = false, schema = null, keyIncluded = false, pointersMetadata = false }: { searchCriteria?: { [key: string]: any }; limitOutput?: { start: number; stop: number }; withPointers?: boolean; schema?: any; keyIncluded?: boolean; pointersMetadata?: boolean } = {}): Promise<any> {
 
-
-        if (pointersMetadata && withPointers) {
-            throw new Error("You select both pointers value and pointers metadata. Choose one");
-        }
-
         try {
             this.command = "lookup_values";
             const query = convertToBinaryQuery(this, { searchCriteria, limitOutput, withPointers, schema, keyIncluded, pointersMetadata });
