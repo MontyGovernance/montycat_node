@@ -158,11 +158,11 @@ class GenericKV {
 
             const selectedOptions = [
                 bulkKeys.length > 0,
-                volumes.length > 0 || latestVolume,
+                volumes.length > 0 || latestVolume || (limitOutput.start !== 0 || limitOutput.stop !== 0),
             ].filter(Boolean).length;
 
             if (selectedOptions !== 1) {
-                throw new Error("Multiple conflicting options provided. Please provide keys or volumes/latest volume.");
+                throw new Error("Please provide keys or volumes/latest volume or limit.");
             }
 
             this.command = "get_bulk";
