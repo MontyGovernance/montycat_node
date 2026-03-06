@@ -174,10 +174,6 @@ class InMemory extends GenericKV {
      */
     static async getKeys({ volumes = [], latestVolume = false }: { volumes?: string[], latestVolume?: boolean } = {}): Promise<any> {
 
-        if (latestVolume && volumes.length > 0) {
-            throw new Error("Select either latest volume or volumes list, not both.");
-        }
-
         this.command = "get_keys";
         const query = convertToBinaryQuery(this, { volumes, latestVolume });
         return runQuery(this, query);

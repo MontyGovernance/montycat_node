@@ -153,21 +153,16 @@ class GenericKV {
      */
     static async getBulk({ bulkKeys = [], bulkCustomKeys = [], limitOutput = { start: 0, stop: 0 }, withPointers = false, keyIncluded = false, pointersMetadata = false, volumes = [], latestVolume = false }: { bulkKeys?: string[]; bulkCustomKeys?: string[]; limitOutput?: { start: number; stop: number }; withPointers?: boolean; keyIncluded?: boolean; pointersMetadata?: boolean; volumes?: string[]; latestVolume?: boolean } = {}): Promise<any> {
 
-        if (pointersMetadata && withPointers) {
-            throw new Error("You select both pointers value and pointers metadata. Choose one");
-        }
-
         try {
             if (bulkCustomKeys.length) bulkKeys = bulkKeys.concat(convertCustomKeys(bulkCustomKeys));
 
             const selectedOptions = [
                 bulkKeys.length > 0,
-                volumes.length > 0,
-                latestVolume
+                volumes.length > 0 || latestVolume,
             ].filter(Boolean).length;
 
             if (selectedOptions !== 1) {
-                throw new Error("Multiple conflicting options provided. Please provide exactly one of the following: keys, volumes, or latest volume.");
+                throw new Error("Multiple conflicting options provided. Please provide keys or volumes/latest volume.");
             }
 
             this.command = "get_bulk";

@@ -119,10 +119,6 @@ class Persistent extends GenericKV {
      */
     static async getKeys({ limitOutput = { start: 0, stop: 0 }, latestVolume = false, volumes = [] }: { limitOutput?: { start: number; stop: number }; latestVolume?: boolean; volumes?: string[] } = {}): Promise<any> {
 
-        if (latestVolume && volumes.length > 0) {
-            throw new Error("Select either latest volume or volumes list, not both.");
-        }
-
         this.command = "get_keys";
         const query = convertToBinaryQuery(this, { limitOutput, latestVolume, volumes });
         return runQuery(this, query);
