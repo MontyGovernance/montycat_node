@@ -153,21 +153,16 @@ class GenericKV {
      */
     static async getBulk({ bulkKeys = [], bulkCustomKeys = [], limitOutput = { start: 0, stop: 0 }, withPointers = false, keyIncluded = false, pointersMetadata = false, volumes = [], latestVolume = false }: { bulkKeys?: string[]; bulkCustomKeys?: string[]; limitOutput?: { start: number; stop: number }; withPointers?: boolean; keyIncluded?: boolean; pointersMetadata?: boolean; volumes?: string[]; latestVolume?: boolean } = {}): Promise<any> {
 
-        if (pointersMetadata && withPointers) {
-            throw new Error("You select both pointers value and pointers metadata. Choose one");
-        }
-
         try {
             if (bulkCustomKeys.length) bulkKeys = bulkKeys.concat(convertCustomKeys(bulkCustomKeys));
 
             const selectedOptions = [
                 bulkKeys.length > 0,
-                volumes.length > 0,
-                latestVolume
+                volumes.length > 0 || latestVolume || (limitOutput.start !== 0 || limitOutput.stop !== 0),
             ].filter(Boolean).length;
 
             if (selectedOptions !== 1) {
-                throw new Error("Multiple conflicting options provided. Please provide exactly one of the following: keys, volumes, or latest volume.");
+                throw new Error("Please provide keys or volumes/latest volume or limit.");
             }
 
             this.command = "get_bulk";
@@ -230,11 +225,6 @@ class GenericKV {
      * @return A promise that resolves with the result of the lookup.
      */
     static async lookupValuesWhere({ searchCriteria = {}, limitOutput = { start: 0, stop: 0 }, withPointers = false, schema = null, keyIncluded = false, pointersMetadata = false }: { searchCriteria?: { [key: string]: any }; limitOutput?: { start: number; stop: number }; withPointers?: boolean; schema?: any; keyIncluded?: boolean; pointersMetadata?: boolean } = {}): Promise<any> {
-
-
-        if (pointersMetadata && withPointers) {
-            throw new Error("You select both pointers value and pointers metadata. Choose one");
-        }
 
         try {
             this.command = "lookup_values";

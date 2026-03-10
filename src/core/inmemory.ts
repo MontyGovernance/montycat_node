@@ -174,8 +174,8 @@ class InMemory extends GenericKV {
      */
     static async getKeys({ volumes = [], latestVolume = false }: { volumes?: string[], latestVolume?: boolean } = {}): Promise<any> {
 
-        if (latestVolume && volumes.length > 0) {
-            throw new Error("Select either latest volume or volumes list, not both.");
+        if ((!volumes || volumes.length === 0) && !latestVolume) {
+            throw new Error("Please provide volumes/latest volume.");
         }
 
         this.command = "get_keys";
