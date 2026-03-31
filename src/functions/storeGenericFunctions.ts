@@ -70,7 +70,7 @@ function processBulkKeysValues(bulkKeysValues: { [key: string]: any }): { [key: 
  * @param options - An object containing various options for the query.
  * @returns A JSON string representing the binary query.
  * */
-function convertToBinaryQuery(cls:  any, options: { [key: string]: any } = {}) : string {
+function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): string {
     const {
         key = null,
         value = {},
@@ -107,12 +107,12 @@ function convertToBinaryQuery(cls:  any, options: { [key: string]: any } = {}) :
         value: JSON.stringify(processedValue),
         command: cls.command,
         expire: expireSec,
-        bulk_values:  processedBulkValues.map(v => JSON.stringify(v)),
+        bulk_values: processedBulkValues.map(v => JSON.stringify(v)),
         bulk_keys: bulkKeys,
         bulk_keys_values: bulkKeysValuesProcessed,
         search_criteria: JSON.stringify(processedSearchCriteria),
         with_pointers: withPointers,
-        schema: foundSchema ? foundSchema: uniqueSchema ? uniqueSchema : schema,
+        schema: foundSchema ? foundSchema : uniqueSchema ? uniqueSchema : schema,
         key_included: keyIncluded,
         pointers_metadata: pointersMetadata,
         volumes,
@@ -194,7 +194,7 @@ function processBulkValues(bulkValues: any[]) {
         });
     }
 
-    return { processedBulkValues: arrayWithValues, uniqueSchema: uniqueSchemas.size > 0 ? uniqueSchemas.values().next().value: null };
+    return { processedBulkValues: arrayWithValues, uniqueSchema: uniqueSchemas.size > 0 ? uniqueSchemas.values().next().value : null };
 }
 
 /**
@@ -203,7 +203,7 @@ function processBulkValues(bulkValues: any[]) {
  * @param query - The query string to execute.
  * @returns A promise that resolves with the result of the query.
  */
-async function runQuery(cls: any, query: string, callback?: (data: any) => void, subscribe=false): Promise<unknown> {
+async function runQuery(cls: any, query: string, callback?: (data: any) => void, subscribe = false): Promise<unknown> {
     const port = subscribe ? cls.port + 1 : cls.port;
     return sendData(cls.host, port, query, callback, cls.useTls);
 }

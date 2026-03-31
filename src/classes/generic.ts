@@ -48,16 +48,16 @@ class GenericKV {
      */
     static async getValue({ key = "", customKey = null, withPointers = false, keyIncluded = false, pointersMetadata = false }: { key?: string; customKey?: string | null; withPointers?: boolean; keyIncluded?: boolean; pointersMetadata?: boolean } = {}): Promise<any> {
 
-        if (pointersMetadata && withPointers) {
-            throw new Error("You select both pointers value and pointers metadata. Choose one");
-        }
-
         try {
-            if (customKey) key = convertCustomKey(customKey);
-
-            if (!key) {
-                throw new Error("No key provided");
+            if (key && customKey) {
+                throw new Error("Provide either 'key' or 'customKey', not both.");
             }
+
+            if (!key && !customKey) {
+                throw new Error("Provide either 'key' or 'customKey'.");
+            }
+
+            if (customKey) key = convertCustomKey(customKey);
 
             this.command = "get_value";
             const query = convertToBinaryQuery(this, { key, withPointers, keyIncluded, pointersMetadata });
@@ -75,13 +75,17 @@ class GenericKV {
      * */
     static async listAllDependingKeys({ key = "", customKey = null }: { key?: string; customKey?: string | null } = {}): Promise<any> {
         try {
-            if (customKey) key = convertCustomKey(customKey);
-
-            if (!key) {
-                throw new Error("No key provided");
+            if (key && customKey) {
+                throw new Error("Provide either 'key' or 'customKey', not both.");
             }
 
-                this.command = "list_all_depending_keys";
+            if (!key && !customKey) {
+                throw new Error("Provide either 'key' or 'customKey'.");
+            }
+
+            if (customKey) key = convertCustomKey(customKey);
+
+            this.command = "list_all_depending_keys";
             const query = convertToBinaryQuery(this, { key });
             return runQuery(this, query);
         } catch (err) {
@@ -103,6 +107,10 @@ class GenericKV {
      * */
     static async deleteKey({ key = "", customKey = null }: { key?: string; customKey?: string | null } = {}): Promise<any> {
         try {
+            if (key && customKey) {
+                throw new Error("Provide either 'key' or 'customKey', not both.");
+            }
+
             if (customKey) key = convertCustomKey(customKey);
 
             if (!key) {
@@ -252,11 +260,11 @@ class GenericKV {
     static async removeKeyspace(): Promise<any> {
         const query = {
             raw: [
-                    "remove-keyspace",
-                    "store", this.store,
-                    "keyspace", this.keyspace,
-                    "persistent", this.persistent ? "y" : "n",
-                ],
+                "remove-keyspace",
+                "store", this.store,
+                "keyspace", this.keyspace,
+                "persistent", this.persistent ? "y" : "n",
+            ],
             credentials: [this.username, this.password],
         };
         return await runQuery(this, JSON.stringify(query));
@@ -296,13 +304,13 @@ class GenericKV {
 
         const query = {
             raw: [
-                    "enforce-schema",
-                    "store", this.store,
-                    "keyspace", this.keyspace,
-                    "persistent", this.persistent ? "y" : "n",
-                    "schema_name", schema.name,
-                    "schema_content", `${JSON.stringify(schemaTypes)}`
-                ],
+                "enforce-schema",
+                "store", this.store,
+                "keyspace", this.keyspace,
+                "persistent", this.persistent ? "y" : "n",
+                "schema_name", schema.name,
+                "schema_content", `${JSON.stringify(schemaTypes)}`
+            ],
             credentials: [this.username, this.password],
         };
 
@@ -322,12 +330,12 @@ class GenericKV {
 
         const query = {
             raw: [
-                    "remove-enforced-schema",
-                    "store", this.store,
-                    "keyspace", this.keyspace,
-                    "persistent", this.persistent ? "y" : "n",
-                    "schema_name", schema.name
-                ],
+                "remove-enforced-schema",
+                "store", this.store,
+                "keyspace", this.keyspace,
+                "persistent", this.persistent ? "y" : "n",
+                "schema_name", schema.name
+            ],
             credentials: [this.username, this.password],
         };
 
@@ -340,6 +348,34 @@ class GenericKV {
      */
     showStoreProperties(): this {
         return this;
+    }
+
+    /**
+     * Subscribes to changes in the keyspace.
+     * Inherited by InMemory and Persistent - `this.persistent` resolves correctly per subclass.
+     * @param callback - A callback function to handle incoming data.
+     * @param key - A specific key to subscribe to.
+     * @param customKey - A custom key to subscribe to (will be hashed with XXH32).
+     * @returns A promise that resolves with a subscription handle ({ stop() }).
+     */
+    static async subscribe({ callback, key, customKey }: { callback?: (data: any) => void; key?: string; customKey?: string }): Promise<any> {
+        if (key && customKey) {
+            throw new Error("Provide either 'key' or 'customKey', not both.");
+        }
+
+        const effectiveKey = customKey ? convertCustomKey(customKey) : (key || null);
+
+        const queryObj = {
+            subscribe: true,
+            store: this.store,
+            keyspace: this.keyspace,
+            username: this.username,
+            password: this.password,
+            persistent: this.persistent,
+            key: effectiveKey,
+        };
+
+        return await runQuery(this, JSON.stringify(queryObj), callback, true);
     }
 }
 

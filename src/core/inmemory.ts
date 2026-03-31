@@ -18,12 +18,12 @@ class InMemory extends GenericKV {
     static async createKeyspace(): Promise<any> {
         const query = {
             raw: [
-                    "create-keyspace",
-                    "store", this.store,
-                    "keyspace", this.keyspace,
-                    "persistent", this.persistent ? "y" : "n",
-                    "distributed", this.distributed ? "y" : "n"
-                ],
+                "create-keyspace",
+                "store", this.store,
+                "keyspace", this.keyspace,
+                "persistent", this.persistent ? "y" : "n",
+                "distributed", this.distributed ? "y" : "n"
+            ],
             credentials: [this.username, this.password],
         };
         return await runQuery(this, JSON.stringify(query));
@@ -41,10 +41,10 @@ class InMemory extends GenericKV {
 
         const query = {
             raw: [
-                    "do-snapshots-for-keyspace",
-                    "store", this.store,
-                    "keyspace", this.keyspace,
-                ],
+                "do-snapshots-for-keyspace",
+                "store", this.store,
+                "keyspace", this.keyspace,
+            ],
             credentials: [this.username, this.password],
         };
         return runQuery(this, JSON.stringify(query));
@@ -62,10 +62,10 @@ class InMemory extends GenericKV {
 
         const query = {
             raw: [
-                    "clean-snapshots-for-keyspace",
-                    "store", this.store,
-                    "keyspace", this.keyspace,
-                ],
+                "clean-snapshots-for-keyspace",
+                "store", this.store,
+                "keyspace", this.keyspace,
+            ],
             credentials: [this.username, this.password],
         };
         return runQuery(this, JSON.stringify(query));
@@ -83,10 +83,10 @@ class InMemory extends GenericKV {
 
         const query = {
             raw: [
-                    "stop-snapshots-for-keyspace",
-                    "store", this.store,
-                    "keyspace", this.keyspace,
-                ],
+                "stop-snapshots-for-keyspace",
+                "store", this.store,
+                "keyspace", this.keyspace,
+            ],
             credentials: [this.username, this.password],
         };
         return runQuery(this, JSON.stringify(query));
