@@ -8,62 +8,14 @@ import GenericKV from '../classes/generic.js';
 class Persistent extends GenericKV {
     static persistent: boolean = true;
     static distributed: boolean = false;
-    static cache: number | null = null;
-    static compression: boolean = false;
 
     keyspace: string;
 
-    constructor(options: { keyspace: string; username: string; password: string; [key: string]: any }) {
+    constructor(options: { keyspace: string; username: string; password: string;[key: string]: any }) {
         super(options);
         this.keyspace = options.keyspace;
     }
 
-    /**
-     * Subscribes to changes in the persistent store based on the provided options.
-     * @param callback - A callback function to handle incoming data.
-     * @param key - A specific key to subscribe to.
-     * @param customKey - A custom key to subscribe to.
-     * @return A promise that resolves with the result of the subscription.
-     * Note: Subscriptions are only allowed on non-persistent keyspaces, so this method will throw an error if called on a persistent keyspace.
-     * The effective key for the subscription is determined by the presence of a custom key or a regular key, with the custom key taking precedence if both are provided.
-     * The subscription query is constructed with the appropriate parameters and sent to the server using the runQuery function, with the callback function passed to handle incoming data.
-     * If the subscription is successful, the promise will resolve with the result of the subscription; otherwise, it will reject with an error.
-     * Error handling is implemented to ensure that subscriptions are not allowed on persistent keyspaces, and that a key is provided for the subscription.
-     * The method is designed to facilitate real-time updates and notifications for changes in the keyspace, allowing clients to react to data changes as they occur.
-     * Overall, this method provides a mechanism for clients to stay informed about changes in the persistent store, while enforcing the constraints of the keyspace type and ensuring that necessary parameters are provided for the subscription.
-     * @throws Will throw an error if subscriptions are attempted on a persistent keyspace or if no key is provided for the subscription.
-     * @example
-     * Persistent.subscribe({
-     *   callback: (data) => {
-     *    console.log("Received data:", data);
-     *  },
-     *  key: "myKey"
-     * });
-     * @example
-     * Persistent.subscribe({
-     *  callback: (data) => {
-     *   console.log("Received data for custom key:", data);
-     * },
-     * customKey: "myCustomKey"
-     * });
-     */
-    static async subscribe({callback, key, customKey}: {callback?: (data: any) => void, key?: string, customKey?: string}): Promise<any> {
-
-        const effectiveKey = customKey ? convertCustomKey(customKey) : (key || null);
-
-        const queryObj = {
-            subscribe: true,
-            key: effectiveKey,
-            keyspace: this.keyspace,
-            store: this.store,
-            username: this.username,
-            password: this.password
-        }
-
-        const query = JSON.stringify(queryObj);
-        return await runQuery(this, query, callback, true);
-
-    }
 
     /**
      * Inserts a value into the persistent store.
@@ -158,24 +110,26 @@ class Persistent extends GenericKV {
 
     /**
      * Updates the cache and compression settings for the persistent store.
-     * @param cache - The cache settings to apply.
-     * @param compression - Whether to enable compression.
+     * @param options - Optional cache (number) and compression (boolean) settings.
      * @return A promise that resolves with the result of the update.
      */
-    static async updateCacheAndCompression(): Promise<any> {
+    static async updateCacheAndCompression({ cache, compression }: { cache?: number; compression?: boolean } = {}): Promise<any> {
 
         if (!this.persistent) {
             throw new Error("Cache and compression settings can only be updated for persistent keyspaces.");
         }
 
+        const cacheValue = cache !== undefined ? cache.toString() : "0";
+        const compressionValue = compression === true ? "y" : "n";
+
         const query = {
             raw: [
-                    "update-cache-compression",
-                    "store", this.store,
-                    "keyspace", this.keyspace,
-                    "cache", this.cache ? this.cache : "0",
-                    "compression", this.compression ? "y" : "n"
-                ],
+                "update-cache-compression",
+                "store", this.store,
+                "keyspace", this.keyspace,
+                "cache", cacheValue,
+                "compression", compressionValue
+            ],
             credentials: [this.username, this.password],
         };
         return await runQuery(this, JSON.stringify(query));
@@ -183,19 +137,24 @@ class Persistent extends GenericKV {
 
     /**
      * Creates a keyspace in the persistent store.
+     * @param options - Optional cache (number) and compression (boolean) settings.
      * @return A promise that resolves with the result of the keyspace creation.
      */
-    static async createKeyspace(): Promise<any> {
+    static async createKeyspace({ cache, compression }: { cache?: number; compression?: boolean } = {}): Promise<any> {
+
+        const cacheValue = cache !== undefined ? cache.toString() : "0";
+        const compressionValue = compression === true ? "y" : "n";
+
         const query = {
             raw: [
-                    "create-keyspace",
-                    "store", this.store,
-                    "keyspace", this.keyspace,
-                    "persistent", this.persistent ? "y" : "n",
-                    "distributed", this.distributed ? "y" : "n",
-                    "cache", this.cache ? this.cache : "0",
-                    "compression", this.compression ? "y" : "n"
-                ],
+                "create-keyspace",
+                "store", this.store,
+                "keyspace", this.keyspace,
+                "persistent", this.persistent ? "y" : "n",
+                "distributed", this.distributed ? "y" : "n",
+                "cache", cacheValue,
+                "compression", compressionValue
+            ],
             credentials: [this.username, this.password],
         };
         return await runQuery(this, JSON.stringify(query));
