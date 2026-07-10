@@ -1,4 +1,4 @@
-# 🚀 Montycat Node.js Client — High-Performance NoSQL for the Async Era
+# 🚀 Montycat Node.js Client — the self-hosted NoSQL + vector database with built-in AI semantic search for RAG & AI agents, powered by Rust
 
 [![npm version](https://img.shields.io/npm/v/montycat.svg)](https://www.npmjs.com/package/montycat)
 [![npm downloads](https://img.shields.io/npm/dt/montycat.svg)](https://www.npmjs.com/package/montycat)
@@ -6,7 +6,7 @@
 [![Node.js](https://img.shields.io/node/v/montycat.svg)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TS-ready-blue.svg)]()
 
-Montycat Node.js Client is the official JavaScript and TypeScript SDK for Montycat — the next-generation NoSQL engine built on Data Mesh architecture and written in Rust for blazing-fast performance. It gives Node.js developers the power to work with structured, decentralized, and secure data using a clean, asynchronous API that feels native to JavaScript — not like another bloated driver. Montycat is more than a database — it’s a redefinition of how data should feel in modern, real-time systems.
+Montycat Node.js Client is the official JavaScript and TypeScript SDK for Montycat — the **self-hosted NoSQL + vector database** with semantic search built in, so you get **RAG, AI-agent memory, and vector search** in one Rust-powered engine instead of running a separate vector DB (and paying its per-query bill). No cloud lock-in, no ops headache. It gives Node.js developers the power to work with structured, decentralized, and secure data using a clean, asynchronous API that feels native to JavaScript — not like another bloated driver. Montycat is more than a database — it’s a redefinition of how data should feel in modern, real-time systems.
 
 ## 🧭 The Montycat Philosophy
 
@@ -27,6 +27,7 @@ Montycat Node.js Client is the official JavaScript and TypeScript SDK for Montyc
 - 📡 `Real-Time Subscriptions` - Subscribe to keyspace or key changes with live updates.
 - 🔐 `TLS Security` - Encrypted communication and authenticated connections.
 - 🧬 `Schema Support` - Optional schema layer for validation, structure, and type safety.
+- 🧠 `AI Semantic & Vector Search` - Rank stored items by meaning with on-device embeddings. kNN vector search for **RAG, AI agents & LLM apps** — no external API, no separate vector database.
 - 🧱 `Zero Dependencies on ORMs` - No extra abstractions. Just pure, beautiful logic.
 - 🧠 `Easy Integration` - Works with Express, Fastify, Next.js, Deno, and any Node.js runtime.
 
@@ -250,10 +251,54 @@ const res5 = await Sales.lookupValuesWhere({
 
 const res6 = await Production.lookupValuesWhere({
     searchCriteria: { amount: 100 },
-    schema: ProductionSchema
+    schema: ProductionSchema,
     keyIncluded: true
 });
 
 console.log('Lookup results:', res3, res4);
 
+```
+
+## 🧠 AI-Native Semantic Search — Vector Search Built Into Your Database
+
+**Stop bolting a separate vector database onto your stack.** Montycat ranks your data by
+*meaning*, not keywords — an embedded, on-device vector-embedding engine turns every write
+into a searchable vector automatically. It's the retrieval layer for **RAG pipelines, AI
+agents, semantic search, recommendation engines, and LLM-powered apps** — with **zero
+external APIs, zero API keys, and zero extra infrastructure.**
+
+- 🔎 **Semantic / vector search** — kNN similarity over on-device embeddings, not brittle keyword matches.
+- 🤖 **Built for AI** — RAG, semantic retrieval, AI agents, recommendations, dedup, clustering.
+- 🔒 **Private & free** — embeddings never leave your machine. No OpenAI/Cohere bill, no data egress.
+- ⚡ **One system, not two** — your data *and* its vectors live in the same database. No sync jobs, no drift, no second service to run.
+- 🚀 **Zero setup** — no index tuning, no pipeline: `enableSemanticSearch()` and you're ranking by meaning.
+
+> **⚠️ Requires the semantic edition of the server — nothing to compile.** Semantic
+> search runs an embedded ONNX vector-embedding engine that ships only in the
+> **`montycat-semantic`** edition; the default lean `montycat` server does not include it.
+> Get it the way that suits you — pull the `montycat-semantic` **Docker image**, download
+> the prebuilt **package**, or install from the **apt repository**. The Node.js client API
+> is identical either way; just point it at a `montycat-semantic` server (semantic search
+> is enabled by default there, using the `bge-small` model).
+
+Enable it once, DB-wide, on the engine; every keyspace is embedded in the background as
+data is written (the embedding model is downloaded on first enable).
+
+```typescript
+// Turn semantic search on for the whole database (model downloaded on first use).
+// model: 'minilm' | 'bge-small' (default) | 'bge-base' | 'e5-small'
+await engine.enableSemanticSearch();
+
+// Rank stored items by meaning — two flavors:
+//   getValues → each hit is { key, score, value }
+//   getKeys   → each hit is { key, score } (lighter; fetch a page later with getBulk)
+await Sales.semanticSearchGetValues({ query: 'wireless headphones', limitOutput: { start: 0, stop: 5 } });
+await Sales.semanticSearchGetKeys({ query: 'wireless headphones', limitOutput: { start: 0, stop: 5 } });
+
+// Optionally drop weak matches by cosine similarity (range [-1, 1]).
+await Sales.semanticSearchGetKeys({ query: 'wireless headphones', limitOutput: { start: 0, stop: 5 }, minScore: 0.35 });
+
+// Turn it off (vectors are kept so re-enabling resumes instantly;
+// pass { dropVectors: true } to also clear stored vectors).
+await engine.disableSemanticSearch();
 ```

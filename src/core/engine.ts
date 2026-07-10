@@ -252,6 +252,80 @@ class Engine {
   }
 
   /**
+   * Enable semantic (vector similarity) search.
+   *
+   * Without `store`, this is DB-wide: it flips the whole database on, sets the
+   * default embedding model and field, and enrolls every existing keyspace that
+   * has no semantic config yet (each gets a background backfill so its existing
+   * items become searchable). The chosen model is downloaded on demand on first
+   * enable, so this call may take a while the first time.
+   *
+   * With `store`, it is scoped: only that store's un-enrolled keyspaces are
+   * enrolled and backfilled; the DB-wide switch and default model/field are left
+   * untouched. Use this to (re-)enable one store without re-embedding the entire
+   * database.
+   *
+   * @param {Object} options - Options for enabling semantic search.
+   * @param {string} [options.model] - The embedding model key to use by default.
+   *                                   One of 'minilm', 'bge-small', 'bge-base',
+   *                                   'e5-small'. Defaults to the server default
+   *                                   ('bge-small').
+   * @param {string} [options.field] - The JSON field of each value to embed.
+   *                                   Defaults to embedding the whole value.
+   * @param {string} [options.store] - Restrict enrollment/backfill to this store
+   *                                   only. If the DB-wide switch is off, a scoped
+   *                                   enable enrolls but nothing embeds until a
+   *                                   DB-wide enable.
+   * @returns {Promise<unknown>} The server's response describing the enabled
+   *                             model and enrolled keyspaces.
+   */
+  async enableSemanticSearch({ model, field, store }: { model?: string; field?: string; store?: string } = {}): Promise<unknown> {
+    const rawQuery: RawQuery = {
+      raw: ['enable-semantic-search'],
+      credentials: [this.username!, this.password!],
+    };
+    if (model) rawQuery.raw.push('model', model);
+    if (field) rawQuery.raw.push('field', field);
+    if (store) rawQuery.raw.push('store', store);
+
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+  }
+
+  /**
+   * Disable semantic search.
+   *
+   * Without `store`, this is DB-wide: embedding and semantic queries stop across
+   * the whole database; stored vectors are kept by default so re-enabling
+   * resumes without a full re-embed.
+   *
+   * With `store`, it is scoped: only that store's keyspaces are unenrolled
+   * (their configs and resident graphs dropped); the DB-wide switch and all
+   * other stores are left untouched. This is the surgical way to reset one
+   * store's semantic state instead of nuking and re-backfilling the whole
+   * database.
+   *
+   * @param {Object} options - Options for disabling semantic search.
+   * @param {boolean} [options.dropVectors=false] - If true, also clear stored
+   *                                                vectors — every keyspace's
+   *                                                DB-wide, or the scoped store's
+   *                                                when `store` is set. Required
+   *                                                before switching to a different
+   *                                                embedding model.
+   * @param {string} [options.store] - Restrict the disable to this store only.
+   * @returns {Promise<unknown>} The server's response confirming the disable.
+   */
+  async disableSemanticSearch({ dropVectors = false, store }: { dropVectors?: boolean; store?: string } = {}): Promise<unknown> {
+    const rawQuery: RawQuery = {
+      raw: ['disable-semantic-search'],
+      credentials: [this.username!, this.password!],
+    };
+    if (dropVectors) rawQuery.raw.push('drop-vectors');
+    if (store) rawQuery.raw.push('store', store);
+
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+  }
+
+  /**
    * Retrieves the structure of the store.
    * @returns {Promise<unknown>} A promise that resolves with the structure of the store
    * */
@@ -261,6 +335,115 @@ class Engine {
 
     const rawQuery: RawQuery = {
       raw: ['get-structure-available', ...storePart],
+      credentials: [this.username!, this.password!],
+    };
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+  }
+
+  /**
+   * Enable the DB-wide "wait for index" default: writes block until their
+   * secondary indexes are updated before returning, so a write is immediately
+   * visible to index-backed reads (e.g. lookupValuesWhere) at the cost of
+   * higher write latency. Requires superowner credentials.
+   * @returns {Promise<unknown>} The server's response confirming the change.
+   */
+  async enableWaitForIndex(): Promise<unknown> {
+    const rawQuery: RawQuery = {
+      raw: ['enable-wait-for-index'],
+      credentials: [this.username!, this.password!],
+    };
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+  }
+
+  /**
+   * Disable the DB-wide "wait for index" default: writes return as soon as the
+   * data is committed and indexing happens asynchronously in the background
+   * (lower write latency; index-backed reads may briefly lag). This is the
+   * default behavior. Requires superowner credentials.
+   * @returns {Promise<unknown>} The server's response confirming the change.
+   */
+  async disableWaitForIndex(): Promise<unknown> {
+    const rawQuery: RawQuery = {
+      raw: ['disable-wait-for-index'],
+      credentials: [this.username!, this.password!],
+    };
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+  }
+
+  /** Internal helper for no-argument superowner raw commands. */
+  private async _adminCommand(command: string): Promise<unknown> {
+    const rawQuery: RawQuery = {
+      raw: [command],
+      credentials: [this.username!, this.password!],
+    };
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+  }
+
+  /**
+   * Enable server-side operation reporting (logging). Requires superowner credentials.
+   * @returns {Promise<unknown>} The server's response confirming the change.
+   */
+  async enableReports(): Promise<unknown> {
+    return this._adminCommand('enable-reports');
+  }
+
+  /**
+   * Disable server-side operation reporting (logging). Requires superowner credentials.
+   * @returns {Promise<unknown>} The server's response confirming the change.
+   */
+  async disableReports(): Promise<unknown> {
+    return this._adminCommand('disable-reports');
+  }
+
+  /**
+   * Allow clients to open keyspace subscriptions DB-wide. Requires superowner credentials.
+   * @returns {Promise<unknown>} The server's response confirming the change.
+   */
+  async allowSubscriptions(): Promise<unknown> {
+    return this._adminCommand('allow-subscriptions');
+  }
+
+  /**
+   * Restrict (disallow) keyspace subscriptions DB-wide. Requires superowner credentials.
+   * @returns {Promise<unknown>} The server's response confirming the change.
+   */
+  async restrictSubscriptions(): Promise<unknown> {
+    return this._adminCommand('restrict-subscriptions');
+  }
+
+  /**
+   * Sample the current depth of every background task queue (index, timer,
+   * counting) — an observability probe for whether the background runners are
+   * keeping up with the write rate. Requires superowner credentials.
+   * @returns {Promise<unknown>} The server's response whose payload maps
+   *   "index" | "timer" | "counting" to per-queue depth maps.
+   */
+  async queueDepths(): Promise<unknown> {
+    return this._adminCommand('queue-depths');
+  }
+
+  /**
+   * Set the server-wide snapshot rate. Requires superowner credentials.
+   * @param {number} rate - The snapshot rate value (server-defined units).
+   * @returns {Promise<unknown>} The server's response confirming the change.
+   */
+  async setSnapshotRate(rate: number): Promise<unknown> {
+    const rawQuery: RawQuery = {
+      raw: ['snapshot-rate', String(rate)],
+      credentials: [this.username!, this.password!],
+    };
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+  }
+
+  /**
+   * Set how often the server scans for expired keys. Requires superowner credentials.
+   * @param {number} rate - Number of 15-minute intervals between expiration scans;
+   *   multiplied by 900 seconds server-side (e.g. rate=4 → a scan every 60 minutes).
+   * @returns {Promise<unknown>} The server's response confirming the change.
+   */
+  async setExpirationCheckRate(rate: number): Promise<unknown> {
+    const rawQuery: RawQuery = {
+      raw: ['expiration-check', String(rate)],
       credentials: [this.username!, this.password!],
     };
     return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);

@@ -22,23 +22,27 @@ class Persistent extends GenericKV {
      * @param value - The value to insert.
      * @return A promise that resolves with the result of the insertion.
      */
-    static async insertValue({ value = {} }: { value?: any } = {}): Promise<any> {
+    static async insertValue({ value = {}, waitForIndex = null }: { value?: any; waitForIndex?: boolean | null } = {}): Promise<any> {
         this.command = "insert_value";
-        const query = convertToBinaryQuery(this, { value });
+        const query = convertToBinaryQuery(this, { value, waitForIndex });
         return runQuery(this, query);
     }
 
     /**
      * Inserts a custom key into the persistent store.
      * @param customKey - The custom key to insert.
+     * @param waitForIndex - Per-request synchronous-index override. `true` → the write
+     *   returns only after its secondary indexes are updated (read-your-writes); `false`
+     *   → fire-and-forget indexing; `null` (default) → use the DB-wide default (see
+     *   `Engine.enable/disableWaitForIndex`). Applies to persistent writes.
      * @return A promise that resolves with the result of the insertion.
      */
-    static async insertCustomKey({ customKey }: { customKey: string }): Promise<any> {
+    static async insertCustomKey({ customKey, waitForIndex = null }: { customKey: string; waitForIndex?: boolean | null }): Promise<any> {
         if (!customKey) {
             throw new Error("No key provided");
         }
         this.command = "insert_custom_key";
-        const query = convertToBinaryQuery(this, { key: convertCustomKey(customKey) });
+        const query = convertToBinaryQuery(this, { key: convertCustomKey(customKey), waitForIndex });
         return runQuery(this, query);
     }
 
@@ -46,14 +50,15 @@ class Persistent extends GenericKV {
      * Inserts a custom key-value pair into the persistent store.
      * @param customKey - The custom key for the value.
      * @param value - The value to insert.
+     * @param waitForIndex - Per-request synchronous-index override; null (default) uses the DB-wide default.
      * @return A promise that resolves with the result of the insertion.
      */
-    static async insertCustomKeyValue({ customKey, value = {} }: { customKey: string; value?: any }): Promise<any> {
+    static async insertCustomKeyValue({ customKey, value = {}, waitForIndex = null }: { customKey: string; value?: any; waitForIndex?: boolean | null }): Promise<any> {
         if (!customKey) {
             throw new Error("No key provided");
         }
         this.command = "insert_custom_key_value";
-        const query = convertToBinaryQuery(this, { key: convertCustomKey(customKey), value });
+        const query = convertToBinaryQuery(this, { key: convertCustomKey(customKey), value, waitForIndex });
         return runQuery(this, query);
     }
 
@@ -62,9 +67,10 @@ class Persistent extends GenericKV {
      * @param key - The key for the value to update.
      * @param customKey - The custom key for the value to update.
      * @param value - The new value to set.
+     * @param waitForIndex - Per-request synchronous-index override; null (default) uses the DB-wide default.
      * @return A promise that resolves with the result of the update.
      */
-    static async updateValue({ key = "", customKey = null, value = {} }: { key?: string; customKey?: string | null; value?: any } = {}): Promise<any> {
+    static async updateValue({ key = "", customKey = null, value = {}, waitForIndex = null }: { key?: string; customKey?: string | null; value?: any; waitForIndex?: boolean | null } = {}): Promise<any> {
 
         const effectiveKey = customKey ? convertCustomKey(customKey) : key;
         if (!effectiveKey) {
@@ -72,21 +78,22 @@ class Persistent extends GenericKV {
         }
 
         this.command = "update_value";
-        const query = convertToBinaryQuery(this, { key: effectiveKey, value });
+        const query = convertToBinaryQuery(this, { key: effectiveKey, value, waitForIndex });
         return runQuery(this, query);
     }
 
     /**
      * Inserts multiple key-value pairs into the persistent store in bulk.
      * @param bulk - An array of key-value pairs to insert.
+     * @param waitForIndex - Per-request synchronous-index override; null (default) uses the DB-wide default.
      * @return A promise that resolves with the result of the bulk insertion.
      */
-    static async insertBulk({ bulk = [] }: { bulk?: any[] } = {}): Promise<any> {
+    static async insertBulk({ bulk = [], waitForIndex = null }: { bulk?: any[]; waitForIndex?: boolean | null } = {}): Promise<any> {
         if (!bulk || bulk.length === 0) {
             throw new Error("No values provided");
         }
         this.command = "insert_bulk";
-        const query = convertToBinaryQuery(this, { bulkValues: bulk });
+        const query = convertToBinaryQuery(this, { bulkValues: bulk, waitForIndex });
         return runQuery(this, query);
     }
 
