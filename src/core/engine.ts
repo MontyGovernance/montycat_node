@@ -437,8 +437,8 @@ class Engine {
 
   /**
    * Set how often the server scans for expired keys. Requires superowner credentials.
-   * @param {number} rate - Number of 15-minute intervals between expiration scans;
-   *   multiplied by 900 seconds server-side (e.g. rate=4 → a scan every 60 minutes).
+   * @param {number} rate - The check period in whole seconds (e.g. rate=10 → a scan
+   *   every 10 seconds). Stored as-is, like the snapshot rate. Defaults to 1 second.
    * @returns {Promise<unknown>} The server's response confirming the change.
    */
   async setExpirationCheckRate(rate: number): Promise<unknown> {
