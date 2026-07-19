@@ -86,6 +86,9 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
         pointersMetadata = false,
         volumes = [],
         latestVolume = false,
+        semanticQuery = null,
+        minScore = null,
+        waitForIndex = null,
     } = options;
 
     const { processedValue, foundSchema } = processValue(value);
@@ -94,7 +97,7 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
     const bulkKeysValuesProcessed = processBulkKeysValues(bulkKeysValues);
     const processedSearchCriteria = processSearchCriteria(searchCriteria);
 
-    return JSON.stringify({
+    const queryDict: { [key: string]: any } = {
         username: cls.username,
         password: cls.password,
         namespace: cls.namespace,
@@ -110,14 +113,30 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
         bulk_values: processedBulkValues.map(v => JSON.stringify(v)),
         bulk_keys: bulkKeys,
         bulk_keys_values: bulkKeysValuesProcessed,
-        search_criteria: JSON.stringify(processedSearchCriteria),
+        // `semantic_search` sends the raw query text (the engine trims it as a
+        // plain string); every other command sends a JSON-encoded filter map.
+        search_criteria: semanticQuery !== null ? semanticQuery : JSON.stringify(processedSearchCriteria),
         with_pointers: withPointers,
         schema: foundSchema ? foundSchema : uniqueSchema ? uniqueSchema : schema,
         key_included: keyIncluded,
         pointers_metadata: pointersMetadata,
         volumes,
         latest_volume: latestVolume,
-    });
+    };
+
+    // Only `semantic_search` honors min_score; omit it otherwise so the wire is
+    // unchanged for existing commands (the engine defaults the field to None).
+    if (minScore !== null) {
+        queryDict.min_score = minScore;
+    }
+
+    // Per-request wait_for_index override for persistent writes; omit when null
+    // so the server falls back to its DB-wide default (existing wire unchanged).
+    if (waitForIndex !== null) {
+        queryDict.wait_for_index = waitForIndex;
+    }
+
+    return JSON.stringify(queryDict);
 }
 
 function processSearchCriteria(searchCriteria: object[]): object {

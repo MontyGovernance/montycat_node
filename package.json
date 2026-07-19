@@ -1,20 +1,52 @@
 {
   "name": "montycat",
-  "version": "1.1.5",
-  "description": "A Node.js client for Montycat, NoSQL database utilizing Data Mesh architecture.",
+  "version": "1.1.6",
+  "description": "Self-hosted vector database + NoSQL with built-in AI semantic search — the Node.js & TypeScript client for Montycat. A Rust-powered, AI-native Pinecone / Weaviate / Chroma alternative for RAG, AI agents & LLM memory.",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "homepage": "https://montygovernance.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MontyGovernance/montycat_node.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MontyGovernance/montycat_node/issues"
+  },
   "keywords": [
+    "vector-database",
+    "vector-search",
+    "semantic-search",
+    "embeddings",
+    "similarity-search",
+    "knn",
+    "hnsw",
     "database",
     "nosql",
-    "sql",
+    "database-client",
+    "rag",
+    "retrieval-augmented-generation",
+    "ai",
+    "ai-agents",
+    "agent-memory",
+    "ai-memory",
+    "llm",
+    "mcp",
+    "self-hosted",
+    "embedded-database",
+    "pinecone-alternative",
+    "weaviate-alternative",
+    "chroma-alternative",
+    "qdrant-alternative",
+    "redis-alternative",
     "data-mesh",
-    "cache",
-    "lsm",
-    "key-value",
+    "async",
+    "typescript",
+    "rust",
     "realtime",
+    "key-value",
+    "cache",
     "montycat"
   ],
   "exports": {
@@ -23,8 +55,14 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "engines": {
+    "node": ">=18"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "tsc --noEmit",
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc --watch"
@@ -39,7 +77,6 @@
   "license": "MIT",
   "dependencies": {
     "json-bigint": "^1.0.0",
-    "xxhash-wasm": "^1.0.2",
     "xxhashjs": "^0.2.2"
   }
 }

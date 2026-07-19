@@ -98,9 +98,9 @@ class InMemory extends GenericKV {
      * @param expireSec - The expiration time in seconds for the value.
      * @return A promise that resolves with the result of the insertion.
      * */
-    static async insertValue({ value = {}, expireSec = 0 }: { value?: any; expireSec?: number } = {}): Promise<any> {
+    static async insertValue({ value = {}, expireSec = 0, waitForIndex = null }: { value?: any; expireSec?: number; waitForIndex?: boolean | null } = {}): Promise<any> {
         this.command = "insert_value";
-        const query = convertToBinaryQuery(this, { value, expireSec });
+        const query = convertToBinaryQuery(this, { value, expireSec, waitForIndex });
         return runQuery(this, query);
     }
 
@@ -108,14 +108,17 @@ class InMemory extends GenericKV {
      * Inserts a custom key into the in-memory store.
      * @param customKey - The custom key for the value.
      * @param expireSec - The expiration time in seconds for the value.
+     * @param waitForIndex - Per-request synchronous-index override. No-op for in-memory
+     *   keyspaces (snapshot-driven indexing); present for API symmetry with the persistent
+     *   variant, where it takes effect.
      * @return A promise that resolves with the result of the insertion.
      */
-    static async insertCustomKey({ customKey, expireSec = 0 }: { customKey: string; expireSec?: number }): Promise<any> {
+    static async insertCustomKey({ customKey, expireSec = 0, waitForIndex = null }: { customKey: string; expireSec?: number; waitForIndex?: boolean | null }): Promise<any> {
         if (!customKey) {
             throw new Error("No key provided");
         }
         this.command = "insert_custom_key";
-        const query = convertToBinaryQuery(this, { key: convertCustomKey(customKey), expireSec });
+        const query = convertToBinaryQuery(this, { key: convertCustomKey(customKey), expireSec, waitForIndex });
         return runQuery(this, query);
     }
 
@@ -124,11 +127,12 @@ class InMemory extends GenericKV {
      * @param customKey - The custom key for the value.
      * @param value - The value to insert.
      * @param expireSec - The expiration time in seconds for the value.
+     * @param waitForIndex - Per-request synchronous-index override; no-op for in-memory.
      * @return A promise that resolves with the result of the insertion.
      */
-    static async insertCustomKeyValue({ customKey, value = {}, expireSec = 0 }: { customKey: string; value?: any; expireSec?: number }): Promise<any> {
+    static async insertCustomKeyValue({ customKey, value = {}, expireSec = 0, waitForIndex = null }: { customKey: string; value?: any; expireSec?: number; waitForIndex?: boolean | null }): Promise<any> {
         this.command = "insert_custom_key_value";
-        const query = convertToBinaryQuery(this, { key: convertCustomKey(customKey), value, expireSec });
+        const query = convertToBinaryQuery(this, { key: convertCustomKey(customKey), value, expireSec, waitForIndex });
         return runQuery(this, query);
     }
 
@@ -138,9 +142,10 @@ class InMemory extends GenericKV {
      * @param customKey - The custom key for the value to update.
      * @param value - The new value to set.
      * @param expireSec - The expiration time in seconds for the value.
+     * @param waitForIndex - Per-request synchronous-index override; no-op for in-memory.
      * @return A promise that resolves with the result of the update.
      */
-    static async updateValue({ key = "", customKey = null, value = {}, expireSec = 0 }: { key?: string; customKey?: string | null; value?: any; expireSec?: number } = {}): Promise<any> {
+    static async updateValue({ key = "", customKey = null, value = {}, expireSec = 0, waitForIndex = null }: { key?: string; customKey?: string | null; value?: any; expireSec?: number; waitForIndex?: boolean | null } = {}): Promise<any> {
 
         const effectiveKey = customKey ? convertCustomKey(customKey) : key;
         if (!effectiveKey) {
@@ -148,7 +153,7 @@ class InMemory extends GenericKV {
         }
 
         this.command = "update_value";
-        const query = convertToBinaryQuery(this, { key: effectiveKey, value, expireSec });
+        const query = convertToBinaryQuery(this, { key: effectiveKey, value, expireSec, waitForIndex });
         return runQuery(this, query);
     }
 
@@ -156,14 +161,15 @@ class InMemory extends GenericKV {
         * Inserts a bulk of values into the in-memory store.
         * @param bulk - An array of values to insert.
         * @param expireSec - The expiration time in seconds for the values.
+        * @param waitForIndex - Per-request synchronous-index override; no-op for in-memory.
         * @return A promise that resolves with the result of the insertion.
      */
-    static async insertBulk({ bulk = [], expireSec = 0 }: { bulk?: any[]; expireSec?: number } = {}): Promise<any> {
+    static async insertBulk({ bulk = [], expireSec = 0, waitForIndex = null }: { bulk?: any[]; expireSec?: number; waitForIndex?: boolean | null } = {}): Promise<any> {
         if (!bulk || bulk.length === 0) {
             throw new Error("No values provided");
         }
         this.command = "insert_bulk";
-        const query = convertToBinaryQuery(this, { bulkValues: bulk, expireSec });
+        const query = convertToBinaryQuery(this, { bulkValues: bulk, expireSec, waitForIndex });
         return runQuery(this, query);
     }
 

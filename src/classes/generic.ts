@@ -105,7 +105,7 @@ class GenericKV {
      * @param customKey - The custom key to delete.
      * @return A promise that resolves with the result of the deletion.
      * */
-    static async deleteKey({ key = "", customKey = null }: { key?: string; customKey?: string | null } = {}): Promise<any> {
+    static async deleteKey({ key = "", customKey = null, waitForIndex = null }: { key?: string; customKey?: string | null; waitForIndex?: boolean | null } = {}): Promise<any> {
         try {
             if (key && customKey) {
                 throw new Error("Provide either 'key' or 'customKey', not both.");
@@ -118,7 +118,7 @@ class GenericKV {
             }
 
             this.command = "delete_key";
-            const query = convertToBinaryQuery(this, { key });
+            const query = convertToBinaryQuery(this, { key, waitForIndex });
             return runQuery(this, query);
         } catch (err) {
             throw err;
@@ -131,7 +131,7 @@ class GenericKV {
      * @param bulkCustomKeys - An array of custom keys to delete.
      * @return A promise that resolves with the result of the deletion.
      * */
-    static async deleteBulk({ bulkKeys = [], bulkCustomKeys = [] }: { bulkKeys?: string[]; bulkCustomKeys?: string[] } = {}): Promise<any> {
+    static async deleteBulk({ bulkKeys = [], bulkCustomKeys = [], waitForIndex = null }: { bulkKeys?: string[]; bulkCustomKeys?: string[]; waitForIndex?: boolean | null } = {}): Promise<any> {
         try {
             if (bulkCustomKeys.length) bulkKeys = bulkKeys.concat(convertCustomKeys(bulkCustomKeys));
 
@@ -140,7 +140,7 @@ class GenericKV {
             }
 
             this.command = "delete_bulk";
-            const query = convertToBinaryQuery(this, { bulkKeys });
+            const query = convertToBinaryQuery(this, { bulkKeys, waitForIndex });
             return runQuery(this, query);
         } catch (err) {
             throw err;
@@ -187,7 +187,7 @@ class GenericKV {
      * @param bulkCustomKeysValues - An object where custom keys are the keys to update and values are the new values.
      * @return A promise that resolves with the result of the update.
      */
-    static async updateBulk({ bulkKeysValues = {}, bulkCustomKeysValues = {} }: { bulkKeysValues?: { [key: string]: any }; bulkCustomKeysValues?: { [key: string]: any } } = {}): Promise<any> {
+    static async updateBulk({ bulkKeysValues = {}, bulkCustomKeysValues = {}, waitForIndex = null }: { bulkKeysValues?: { [key: string]: any }; bulkCustomKeysValues?: { [key: string]: any }; waitForIndex?: boolean | null } = {}): Promise<any> {
         try {
             if (Object.keys(bulkCustomKeysValues).length) {
                 bulkKeysValues = { ...bulkKeysValues, ...convertCustomKeysValues(bulkCustomKeysValues) };
@@ -198,7 +198,7 @@ class GenericKV {
             }
 
             this.command = "update_bulk";
-            const query = convertToBinaryQuery(this, { bulkKeysValues });
+            const query = convertToBinaryQuery(this, { bulkKeysValues, waitForIndex });
             return runQuery(this, query);
         } catch (err) {
             throw err;
@@ -241,6 +241,80 @@ class GenericKV {
         } catch (err) {
             throw err;
         }
+    }
+
+    /**
+     * Shared core for `semanticSearchGetKeys` / `semanticSearchGetValues`.
+     * The server command is the same either way (`semantic_search`); the two
+     * public methods differ only in which value-inclusion flags they pass,
+     * so the wire call lives here once.
+     */
+    private static async semanticSearchCore(query: string, limitOutput: { start: number; stop: number }, minScore: number | null, withPointers: boolean, keyIncluded: boolean, pointersMetadata: boolean): Promise<any> {
+        if (!query || !query.trim()) {
+            throw new Error("No query text provided for semantic search.");
+        }
+
+        this.command = "semantic_search";
+        const binaryQuery = convertToBinaryQuery(this, {
+            semanticQuery: query,
+            limitOutput,
+            minScore,
+            withPointers,
+            keyIncluded,
+            pointersMetadata,
+        });
+        return runQuery(this, binaryQuery);
+    }
+
+    /**
+     * Semantic (vector similarity) search returning ranked keys only.
+     *
+     * Ranks stored items by how close their embeddings are to the embedding of
+     * `query` and returns just the matched key and score for each hit — the
+     * lightweight variant when you only need identity + ranking (e.g. to then
+     * `getBulk` a page, or to test membership). Use `semanticSearchGetValues`
+     * when you want the values inline.
+     *
+     * Semantic search must be enabled first (see `Engine.enableSemanticSearch`).
+     * The keyspace is embedded in the background as items are written, so
+     * results reflect whatever has been embedded so far.
+     *
+     * @param query - The natural-language query text to embed and search for.
+     * @param limitOutput - Start/stop over the ranked hits; `{start: 0, stop: 0}`
+     *                      (the default) lets the server apply its default top-k (10).
+     * @param minScore - Drop hits whose cosine similarity (in [-1, 1]) is below
+     *                   this value. Default null (no score filter).
+     * @return A promise resolving with ranked hits, each `{key, score}`.
+     */
+    static async semanticSearchGetKeys({ query, limitOutput = { start: 0, stop: 0 }, minScore = null }: { query: string; limitOutput?: { start: number; stop: number }; minScore?: number | null }): Promise<any> {
+        return this.semanticSearchCore(query, limitOutput, minScore, false, false, false);
+    }
+
+    /**
+     * Semantic (vector similarity) search returning ranked hits with their values.
+     *
+     * Ranks stored items by how close their embeddings are to the embedding of
+     * `query` and returns the value inline with each hit — the key is always
+     * included so every value is tagged with its key. Use
+     * `semanticSearchGetKeys` when you only need keys + scores.
+     *
+     * Semantic search must be enabled first (see `Engine.enableSemanticSearch`).
+     * The keyspace is embedded in the background as items are written, so
+     * results reflect whatever has been embedded so far.
+     *
+     * @param query - The natural-language query text to embed and search for.
+     * @param limitOutput - Start/stop over the ranked hits; `{start: 0, stop: 0}`
+     *                      (the default) lets the server apply its default top-k (10).
+     * @param minScore - Drop hits whose cosine similarity (in [-1, 1]) is below
+     *                   this value. Default null (no score filter).
+     * @param withPointers - Whether to include pointers (foreign values) in each
+     *                       returned value.
+     * @param pointersMetadata - Whether to include pointer metadata in each
+     *                           returned value.
+     * @return A promise resolving with ranked hits, each `{key, score, value}`.
+     */
+    static async semanticSearchGetValues({ query, limitOutput = { start: 0, stop: 0 }, minScore = null, withPointers = false, pointersMetadata = false }: { query: string; limitOutput?: { start: number; stop: number }; minScore?: number | null; withPointers?: boolean; pointersMetadata?: boolean }): Promise<any> {
+        return this.semanticSearchCore(query, limitOutput, minScore, withPointers, true, pointersMetadata);
     }
 
     /**
