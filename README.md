@@ -14,8 +14,8 @@ The official Node.js & TypeScript SDK for [Montycat](https://montygovernance.com
 ```typescript
 // Search your data by MEANING — no external APIs, no separate vector database.
 // (already ON by default in the montycat-semantic server edition)
-const hits = await Sales.semanticSearchGetValues({ query: 'something to listen to music without wires', limitOutput: { start: 0, stop: 5 } });
-// → [{ key, score, value: { name: 'Wireless Headphones' } }, ...]  (matched by meaning, not keywords)
+const hits = await Sales.semanticSearchGetValues({ query: 'Show all Bluetooth devices', limitOutput: { start: 0, stop: 5 } });
+// → [{ __key__, __score__, __value__: { name: 'Wireless Headphones' } }, ...]  (matched by meaning, not keywords)
 ```
 
 > ### 🧩 All-in-one. AI-native. **Zero external dependencies.**
@@ -328,13 +328,13 @@ in the background as data is written (the embedding model is downloaded on deman
 ```typescript
 // Semantic search is ON by default in the montycat-semantic edition — just search.
 // Rank stored items by meaning — two flavors:
-//   getValues → each hit is { key, score, value }
-//   getKeys   → each hit is { key, score } (lighter; fetch a page later with getBulk)
-const hits = await Sales.semanticSearchGetValues({ query: 'something to listen to music without wires', limitOutput: { start: 0, stop: 5 } });
-const keys = await Sales.semanticSearchGetKeys({ query: 'something to listen to music without wires', limitOutput: { start: 0, stop: 5 } });
+//   getValues → each hit is { __key__, __score__, __value__ }
+//   getKeys   → each hit is { __key__, __score__ } (lighter; fetch a page later with getBulk)
+const hits = await Sales.semanticSearchGetValues({ query: 'Show all Bluetooth devices', limitOutput: { start: 0, stop: 5 } });
+const keys = await Sales.semanticSearchGetKeys({ query: 'Show all Bluetooth devices', limitOutput: { start: 0, stop: 5 } });
 
 // Optionally drop weak matches by cosine similarity (range [-1, 1]).
-const strong = await Sales.semanticSearchGetKeys({ query: 'something to listen to music without wires', limitOutput: { start: 0, stop: 5 }, minScore: 0.35 });
+const strong = await Sales.semanticSearchGetKeys({ query: 'Show all Bluetooth devices', limitOutput: { start: 0, stop: 5 }, minScore: 0.35 });
 
 // Control the DB-wide switch (optional — it's already on):
 // switch the embedding model: 'minilm' | 'bge-small' (default) | 'bge-base' | 'e5-small'

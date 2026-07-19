@@ -284,7 +284,7 @@ class GenericKV {
      *                      (the default) lets the server apply its default top-k (10).
      * @param minScore - Drop hits whose cosine similarity (in [-1, 1]) is below
      *                   this value. Default null (no score filter).
-     * @return A promise resolving with ranked hits, each `{key, score}`.
+     * @return A promise resolving with ranked hits, each `{__key__, __score__}`.
      */
     static async semanticSearchGetKeys({ query, limitOutput = { start: 0, stop: 0 }, minScore = null }: { query: string; limitOutput?: { start: number; stop: number }; minScore?: number | null }): Promise<any> {
         return this.semanticSearchCore(query, limitOutput, minScore, false, false, false);
@@ -311,7 +311,9 @@ class GenericKV {
      *                       returned value.
      * @param pointersMetadata - Whether to include pointer metadata in each
      *                           returned value.
-     * @return A promise resolving with ranked hits, each `{key, score, value}`.
+     * @return A promise resolving with ranked hits, each
+     *         `{__key__, __score__, __value__}` — the same dunder envelope
+     *         `lookupValuesWhere` returns with `keyIncluded: true`, plus the score.
      */
     static async semanticSearchGetValues({ query, limitOutput = { start: 0, stop: 0 }, minScore = null, withPointers = false, pointersMetadata = false }: { query: string; limitOutput?: { start: number; stop: number }; minScore?: number | null; withPointers?: boolean; pointersMetadata?: boolean }): Promise<any> {
         return this.semanticSearchCore(query, limitOutput, minScore, withPointers, true, pointersMetadata);
