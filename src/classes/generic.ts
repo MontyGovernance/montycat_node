@@ -249,7 +249,7 @@ class GenericKV {
      * public methods differ only in which value-inclusion flags they pass,
      * so the wire call lives here once.
      */
-    private static async semanticSearchCore(query: string, limitOutput: { start: number; stop: number }, minScore: number | null, withPointers: boolean, keyIncluded: boolean, pointersMetadata: boolean): Promise<any> {
+    private static async semanticSearchCore(query: string, limitOutput: { start: number; stop: number }, minScore: number | null, filters: object | null, withPointers: boolean, keyIncluded: boolean, pointersMetadata: boolean): Promise<any> {
         if (!query || !query.trim()) {
             throw new Error("No query text provided for semantic search.");
         }
@@ -259,6 +259,7 @@ class GenericKV {
             semanticQuery: query,
             limitOutput,
             minScore,
+            semanticFilter: filters,
             withPointers,
             keyIncluded,
             pointersMetadata,
@@ -287,7 +288,35 @@ class GenericKV {
      * @return A promise resolving with ranked hits, each `{__key__, __score__}`.
      */
     static async semanticSearchGetKeys({ query, limitOutput = { start: 0, stop: 0 }, minScore = null }: { query: string; limitOutput?: { start: number; stop: number }; minScore?: number | null }): Promise<any> {
-        return this.semanticSearchCore(query, limitOutput, minScore, false, false, false);
+        return this.semanticSearchCore(query, limitOutput, minScore, null, false, false, false);
+    }
+
+    /**
+     * Hybrid semantic search returning ranked keys only, restricted by a
+     * metadata filter.
+     *
+     * Same ranking as `semanticSearchGetKeys`, but only items matching
+     * `filters` are considered — a hard AND constraint through the same
+     * criteria stack as `lookupKeysWhere` (indexed fields, Timestamp,
+     * Pointer). Scores stay pure cosine; the filter never boosts, it only
+     * restricts. A filter matching nothing resolves with `[]`.
+     *
+     * A separate method (not a parameter on `semanticSearchGetKeys`) so
+     * existing integrations keep their exact signature.
+     *
+     * @param query - The natural-language query text to embed and search for.
+     * @param filters - Metadata criteria, same shape as `lookupKeysWhere`.
+     * @param limitOutput - Start/stop over the ranked hits; `{start: 0, stop: 0}`
+     *                      (the default) lets the server apply its default top-k (10).
+     * @param minScore - Drop hits whose cosine similarity (in [-1, 1]) is below
+     *                   this value. Default null (no score filter).
+     * @return A promise resolving with ranked hits, each `{__key__, __score__}`.
+     */
+    static async semanticSearchGetKeysWhere({ query, filters, limitOutput = { start: 0, stop: 0 }, minScore = null }: { query: string; filters: object; limitOutput?: { start: number; stop: number }; minScore?: number | null }): Promise<any> {
+        if (!filters || Object.keys(filters).length === 0) {
+            throw new Error("No filters provided for hybrid semantic search.");
+        }
+        return this.semanticSearchCore(query, limitOutput, minScore, filters, false, false, false);
     }
 
     /**
@@ -316,7 +345,41 @@ class GenericKV {
      *         `lookupValuesWhere` returns with `keyIncluded: true`, plus the score.
      */
     static async semanticSearchGetValues({ query, limitOutput = { start: 0, stop: 0 }, minScore = null, withPointers = false, pointersMetadata = false }: { query: string; limitOutput?: { start: number; stop: number }; minScore?: number | null; withPointers?: boolean; pointersMetadata?: boolean }): Promise<any> {
-        return this.semanticSearchCore(query, limitOutput, minScore, withPointers, true, pointersMetadata);
+        return this.semanticSearchCore(query, limitOutput, minScore, null, withPointers, true, pointersMetadata);
+    }
+
+    /**
+     * Hybrid semantic search returning ranked hits with their values,
+     * restricted by a metadata filter.
+     *
+     * Same ranking as `semanticSearchGetValues`, but only items matching
+     * `filters` are considered — a hard AND constraint through the same
+     * criteria stack as `lookupKeysWhere` (indexed fields, Timestamp,
+     * Pointer). Scores stay pure cosine; the filter never boosts, it only
+     * restricts. A filter matching nothing resolves with `[]`.
+     *
+     * A separate method (not a parameter on `semanticSearchGetValues`) so
+     * existing integrations keep their exact signature.
+     *
+     * @param query - The natural-language query text to embed and search for.
+     * @param filters - Metadata criteria, same shape as `lookupKeysWhere`.
+     * @param limitOutput - Start/stop over the ranked hits; `{start: 0, stop: 0}`
+     *                      (the default) lets the server apply its default top-k (10).
+     * @param minScore - Drop hits whose cosine similarity (in [-1, 1]) is below
+     *                   this value. Default null (no score filter).
+     * @param withPointers - Whether to include pointers (foreign values) in each
+     *                       returned value.
+     * @param pointersMetadata - Whether to include pointer metadata in each
+     *                           returned value.
+     * @return A promise resolving with ranked hits, each
+     *         `{__key__, __score__, __value__}` — the same dunder envelope
+     *         `lookupValuesWhere` returns with `keyIncluded: true`, plus the score.
+     */
+    static async semanticSearchGetValuesWhere({ query, filters, limitOutput = { start: 0, stop: 0 }, minScore = null, withPointers = false, pointersMetadata = false }: { query: string; filters: object; limitOutput?: { start: number; stop: number }; minScore?: number | null; withPointers?: boolean; pointersMetadata?: boolean }): Promise<any> {
+        if (!filters || Object.keys(filters).length === 0) {
+            throw new Error("No filters provided for hybrid semantic search.");
+        }
+        return this.semanticSearchCore(query, limitOutput, minScore, filters, withPointers, true, pointersMetadata);
     }
 
     /**

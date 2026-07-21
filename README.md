@@ -15,7 +15,7 @@ The official Node.js & TypeScript SDK for [Montycat](https://montygovernance.com
 // Search your data by MEANING — no external APIs, no separate vector database.
 // (already ON by default in the montycat-semantic server edition)
 const hits = await Sales.semanticSearchGetValues({ query: 'Show all Bluetooth devices', limitOutput: { start: 0, stop: 5 } });
-// → [{ __key__, __score__, __value__: { name: 'Wireless Headphones' } }, ...]  (matched by meaning, not keywords)
+// → [{ __key__: 123..., __score__: 0.78, __value__: { name: 'Wireless Headphones' }}]
 ```
 
 > ### 🧩 All-in-one. AI-native. **Zero external dependencies.**
@@ -93,7 +93,7 @@ docker run -d --name montycat \
   -p 21210:21210 -p 21211:21211 \
   -e MONTYCAT_SUPEROWNER="admin" \
   -e MONTYCAT_PASSWORD="change-me" \
-  -v montycat_data:/app/.montycat \
+  -v montycat_data:/var/lib/.montycat \
   montygovernance/montycat:semantic
 ```
 
@@ -343,6 +343,29 @@ await engine.enableSemanticSearch({ model: 'bge-base' });
 // turn it off (vectors are kept so re-enabling resumes instantly;
 // pass { dropVectors: true } to also clear stored vectors)
 await engine.disableSemanticSearch();
+```
+
+### Hybrid semantic search
+
+Use semantic ranking with a structured metadata constraint. The filter is a
+hard AND pre-filter using the same criteria shape as `lookupKeysWhere`; it does
+not boost cosine scores.
+
+```typescript
+const matchingKeys = await Sales.semanticSearchGetKeysWhere({
+  query: 'astronomy and outer space',
+  filters: { category: 'space' },
+  limitOutput: { start: 0, stop: 5 },
+  minScore: 0.35,
+});
+
+const matchingValues = await Sales.semanticSearchGetValuesWhere({
+  query: 'astronomy and outer space',
+  filters: { category: 'space' },
+  limitOutput: { start: 0, stop: 5 },
+});
+// key hits:   { __key__, __score__ }
+// value hits: { __key__, __score__, __value__ }
 ```
 
 ## 🔗 Links

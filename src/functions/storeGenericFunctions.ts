@@ -88,6 +88,7 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
         latestVolume = false,
         semanticQuery = null,
         minScore = null,
+        semanticFilter = null,
         waitForIndex = null,
     } = options;
 
@@ -128,6 +129,13 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
     // unchanged for existing commands (the engine defaults the field to None).
     if (minScore !== null) {
         queryDict.min_score = minScore;
+    }
+
+    // Hybrid metadata pre-filter for `semantic_search` (hard AND constraint,
+    // same criteria shape as lookupKeysWhere — Timestamp/Pointer supported).
+    // Omit when null so the wire is unchanged for existing commands.
+    if (semanticFilter !== null) {
+        queryDict.semantic_filter = JSON.stringify(processSearchCriteria(semanticFilter));
     }
 
     // Per-request wait_for_index override for persistent writes; omit when null
