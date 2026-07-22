@@ -338,7 +338,7 @@ const strong = await Sales.semanticSearchGetKeys({ query: 'Show all Bluetooth de
 
 // Control the DB-wide switch (optional — it's already on):
 // switch the embedding model: 'minilm' | 'bge-small' (default) | 'bge-base' | 'e5-small'
-await engine.enableSemanticSearch({ model: 'bge-base' });
+await engine.enableSemanticSearch({ model: SemanticModel.BGE_BASE });
 
 // turn it off (vectors are kept so re-enabling resumes instantly;
 // pass { dropVectors: true } to also clear stored vectors)
@@ -381,3 +381,21 @@ const matchingValues = await Sales.semanticSearchGetValuesWhere({
 - **Do I need OpenAI or an embedding API?** No. Embeddings run on-device in the `montycat-semantic` server. No API keys, no per-query bill, no data egress.
 - **Is it a Pinecone / Weaviate / Chroma / Qdrant alternative?** Yes — self-hosted and open-source, with a NoSQL store built in.
 - **TypeScript support?** First-class — the package ships its own type definitions. Works with Node.js, Deno, Bun, Express, Fastify, and Next.js.
+## Data mesh governance
+
+Owners can inspect their effective policy and superowners can grant delegated
+keyspace authority programmatically:
+
+```ts
+await engine.policyGrant({
+  owner: 'alice', capability: PolicyCapability.PROVISION_KEYSPACE, store: 'catalog',
+  types: [PolicyKeyspaceType.IN_MEMORY, PolicyKeyspaceType.PERSISTENT], models: [SemanticModel.BGE_SMALL],
+});
+await engine.policyView({ owner: 'alice', store: 'catalog' });
+await engine.enableSemanticSearch({
+  store: 'catalog', keyspace: 'products', model: SemanticModel.BGE_SMALL,
+});
+```
+
+Superowners may also call `policyValidate`, `policyPlan`, `policyApply`, and
+`policyExport` with JSON or YAML policy documents.
