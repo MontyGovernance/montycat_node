@@ -387,6 +387,8 @@ Owners can inspect their effective policy and superowners can grant delegated
 keyspace authority programmatically:
 
 ```ts
+import { PolicyCapability, PolicyKeyspaceType, SemanticModel } from 'montycat';
+
 await engine.policyGrant({
   owner: 'alice', capability: PolicyCapability.PROVISION_KEYSPACE, store: 'catalog',
   types: [PolicyKeyspaceType.IN_MEMORY, PolicyKeyspaceType.PERSISTENT], models: [SemanticModel.BGE_SMALL],
