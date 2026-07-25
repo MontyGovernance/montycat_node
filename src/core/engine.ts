@@ -384,7 +384,7 @@ class Engine {
   async policyExplain({ capability, store, owner, keyspace, keyspaceType, model }: { capability: PolicyCapability; store: string; owner?: string; keyspace?: string; keyspaceType?: PolicyKeyspaceType; model?: SemanticModel }): Promise<unknown> {
     const raw = ['policy-explain', 'capability', capability, 'store', store];
     if (owner) raw.push('owner', owner);
-    if (keyspace) raw.push('keyspace', keyspace);
+    if (keyspace && capability !== PolicyCapability.PROVISION_KEYSPACE) raw.push('keyspace', keyspace);
     if (keyspaceType) raw.push('type', keyspaceType);
     if (model) raw.push('model', model);
     return this.executeRaw(raw);
@@ -392,7 +392,7 @@ class Engine {
 
   private policyMutation(operation: string, { owner, capability, store, keyspace, types = [], models = [] }: { owner: string; capability: PolicyCapability; store: string; keyspace?: string; types?: PolicyKeyspaceType[]; models?: SemanticModel[] }): Promise<unknown> {
     const raw = [operation, 'owner', owner, 'capability', capability, 'store', store];
-    if (keyspace) raw.push('keyspace', keyspace);
+    if (keyspace && capability !== PolicyCapability.PROVISION_KEYSPACE) raw.push('keyspace', keyspace);
     if (types.length) raw.push('types', ...types);
     if (models.length) raw.push('models', ...models);
     return this.executeRaw(raw);
