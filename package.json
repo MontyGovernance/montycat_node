@@ -62,7 +62,7 @@
     "dist"
   ],
   "scripts": {
-    "test": "tsc --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs",
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc --watch"

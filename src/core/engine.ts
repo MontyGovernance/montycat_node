@@ -214,9 +214,14 @@ class Engine {
    * @returns {Promise<unknown>} A promise that resolves with the result of the grant operation.
    */
   async grantTo({ owner, permission, keyspaces }: {owner: string, permission: ValidPermissions, keyspaces?: string | GenericKV[] | string[] | { keyspace: string }}): Promise<unknown> {
+    const normalizedPermission = String(permission).trim().toLowerCase();
+    const validPermissions = Object.values(ValidPermissions);
+    if (!validPermissions.includes(normalizedPermission as ValidPermissions)) {
+      throw new Error(`Invalid permission: ${permission}. Valid permissions are: ${validPermissions}`);
+    }
 
     const query: RawQuery = {
-      raw: ['grant-to', 'owner', owner, 'permission', permission, 'store', this.store!],
+      raw: ['grant-to', 'owner', owner, 'permission', normalizedPermission, 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
 
@@ -251,14 +256,15 @@ class Engine {
    * @returns {Promise<unknown>} A promise that resolves with the result of the revoke operation.
    */
   async revokeFrom({ owner, permission, keyspaces }: { owner: string; permission: ValidPermissions; keyspaces?: string | string[] | GenericKV[] | { keyspace: string } }): Promise<unknown> {
-    const validPermissions = ['read', 'write', 'all'];
+    const normalizedPermission = String(permission).trim().toLowerCase();
+    const validPermissions = Object.values(ValidPermissions);
 
-    if (!validPermissions.includes(permission)) {
+    if (!validPermissions.includes(normalizedPermission as ValidPermissions)) {
       throw new Error(`Invalid permission: ${permission}. Valid permissions are: ${validPermissions}`);
     }
 
     const query: RawQuery = {
-      raw: ['revoke-from', 'owner', owner, 'permission', permission, 'store', this.store!],
+      raw: ['revoke-from', 'owner', owner, 'permission', normalizedPermission, 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
 
@@ -569,7 +575,7 @@ async function sendData(
   return new Promise((resolve, _reject) => {
     let client: net.Socket | tls.TLSSocket;
     let response = "";
-    const subscriptionMode = message.includes("subscribe");
+    const subscriptionMode = isSubscriptionMessage(message);
     let stopped = false;
 
     const onData = (data: Buffer) => {
@@ -658,6 +664,15 @@ async function sendData(
       tcpSocket.connect(port, host, () => finalizeConnect(tcpSocket));
     }
   });
+}
+
+export function isSubscriptionMessage(message: string): boolean {
+  try {
+    const parsed = JSON.parse(message) as { subscribe?: unknown };
+    return parsed?.subscribe === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
