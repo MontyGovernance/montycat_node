@@ -388,6 +388,12 @@ class Engine {
   }
 
   async policyExplain({ capability, store, owner, keyspace, keyspaceType, model }: { capability: PolicyCapability; store: string; owner?: string; keyspace?: string; keyspaceType?: PolicyKeyspaceType; model?: SemanticModel }): Promise<unknown> {
+    if (keyspaceType && capability === PolicyCapability.MANAGE_SNAPSHOTS) {
+      throw new TypeError('keyspaceType is not valid for manage-snapshots policies; snapshots are always in-memory');
+    }
+    if (model && capability !== PolicyCapability.PROVISION_KEYSPACE && capability !== PolicyCapability.MANAGE_SEMANTIC) {
+      throw new TypeError('model is only valid for provision-keyspace or manage-semantic policies');
+    }
     const raw = ['policy-explain', 'capability', capability, 'store', store];
     if (owner) raw.push('owner', owner);
     if (keyspace && capability !== PolicyCapability.PROVISION_KEYSPACE) raw.push('keyspace', keyspace);
@@ -397,6 +403,12 @@ class Engine {
   }
 
   private policyMutation(operation: string, { owner, capability, store, keyspace, types = [], models = [] }: { owner: string; capability: PolicyCapability; store: string; keyspace?: string; types?: PolicyKeyspaceType[]; models?: SemanticModel[] }): Promise<unknown> {
+    if (types.length && capability === PolicyCapability.MANAGE_SNAPSHOTS) {
+      throw new TypeError('types is not valid for manage-snapshots policies; snapshots are always in-memory');
+    }
+    if (models.length && capability !== PolicyCapability.PROVISION_KEYSPACE && capability !== PolicyCapability.MANAGE_SEMANTIC) {
+      throw new TypeError('models is only valid for provision-keyspace or manage-semantic policies');
+    }
     const raw = [operation, 'owner', owner, 'capability', capability, 'store', store];
     if (keyspace && capability !== PolicyCapability.PROVISION_KEYSPACE) raw.push('keyspace', keyspace);
     if (types.length) raw.push('types', ...types);

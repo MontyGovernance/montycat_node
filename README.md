@@ -381,23 +381,46 @@ const matchingValues = await Sales.semanticSearchGetValuesWhere({
 - **Do I need OpenAI or an embedding API?** No. Embeddings run on-device in the `montycat-semantic` server. No API keys, no per-query bill, no data egress.
 - **Is it a Pinecone / Weaviate / Chroma / Qdrant alternative?** Yes — self-hosted and open-source, with a NoSQL store built in.
 - **TypeScript support?** First-class — the package ships its own type definitions. Works with Node.js, Deno, Bun, Express, Fastify, and Next.js.
-## Data mesh governance
 
-Owners can inspect their effective policy and superowners can grant delegated
-keyspace authority programmatically:
+## Data-mesh governance for shared and multi-tenant deployments
+
+Delegate administration without giving every team full server control. Policies scope
+authority to an owner and store, with optional keyspace, storage-type, and semantic-model
+constraints. Platform teams can govern shared infrastructure while domain teams operate
+the data products they own.
+
+- Grant, revoke, or explicitly deny keyspace provisioning/removal, schema, semantic,
+  snapshot, and access-management capabilities.
+- Inspect effective permissions and policy history, or preview a grant/revoke before
+  applying it.
+- Validate, plan, apply, and export JSON or YAML policy manifests for repeatable
+  infrastructure-as-code workflows.
+- Constrain storage types for provisioning, removal, schema, access, and semantic
+  management. Snapshot management is always in-memory, so it takes no storage-type
+  qualifier.
+- Constrain semantic models during keyspace provisioning and semantic management.
+
+For example, a superowner can restrict what Alice may provision and separately delegate
+semantic management for one keyspace:
 
 ```ts
 import { PolicyCapability, PolicyKeyspaceType, SemanticModel } from 'montycat';
 
 await engine.policyGrant({
   owner: 'alice', capability: PolicyCapability.PROVISION_KEYSPACE, store: 'catalog',
-  types: [PolicyKeyspaceType.IN_MEMORY, PolicyKeyspaceType.PERSISTENT], models: [SemanticModel.BGE_SMALL],
+  types: [PolicyKeyspaceType.IN_MEMORY, PolicyKeyspaceType.PERSISTENT],
+  models: [SemanticModel.BGE_SMALL],
+});
+await engine.policyGrant({
+  owner: 'alice', capability: PolicyCapability.MANAGE_SEMANTIC, store: 'catalog',
+  keyspace: 'products',
+  types: [PolicyKeyspaceType.IN_MEMORY],
+  models: [SemanticModel.BGE_SMALL],
 });
 await engine.policyView({ owner: 'alice', store: 'catalog' });
-await engine.enableSemanticSearch({
-  store: 'catalog', keyspace: 'products', model: SemanticModel.BGE_SMALL,
-});
 ```
 
-Superowners may also call `policyValidate`, `policyPlan`, `policyApply`, and
-`policyExport` with JSON or YAML policy documents.
+Use `policyExplain` to inspect an authorization decision and `policyHistory` to audit
+changes. Superowners can manage policies directly with `policyGrant`, `policyRevoke`,
+`policyDeny`, and `policyRemoveDenial`, or use `policyValidate`, `policyPlan`,
+`policyApply`, and `policyExport` with JSON or YAML documents.

@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import net from 'node:net';
 import test from 'node:test';
 
-import { isSubscriptionMessage, sendData } from '../dist/core/engine.js';
+import {
+  Engine,
+  PolicyCapability,
+  PolicyKeyspaceType,
+  SemanticModel,
+  isSubscriptionMessage,
+  sendData,
+} from '../dist/core/engine.js';
 
 async function responseFromServer(response) {
   const server = net.createServer((socket) => {
@@ -39,4 +46,35 @@ test('only the explicit subscribe field enables subscription mode', () => {
   assert.equal(isSubscriptionMessage(JSON.stringify({ subscribe: true })), true);
   assert.equal(isSubscriptionMessage(JSON.stringify({ value: { subscribed: true } })), false);
   assert.equal(isSubscriptionMessage(JSON.stringify({ note: 'subscribe later' })), false);
+});
+
+test('policy qualifiers are restricted to their matching capabilities', async () => {
+  const engine = new Engine();
+
+  assert.throws(
+    () => engine.policyGrant({
+      owner: 'alice',
+      capability: PolicyCapability.MANAGE_SCHEMA,
+      store: 'catalog',
+      models: [SemanticModel.BGE_SMALL],
+    }),
+    /models.*manage-semantic/,
+  );
+  assert.throws(
+    () => engine.policyGrant({
+      owner: 'alice',
+      capability: PolicyCapability.MANAGE_SNAPSHOTS,
+      store: 'catalog',
+      types: [PolicyKeyspaceType.PERSISTENT],
+    }),
+    /types.*manage-snapshots/,
+  );
+  await assert.rejects(
+    engine.policyExplain({
+      capability: PolicyCapability.MANAGE_SCHEMA,
+      store: 'catalog',
+      model: SemanticModel.BGE_SMALL,
+    }),
+    /model.*manage-semantic/,
+  );
 });
