@@ -34,6 +34,38 @@ enum ValidPermissions {
     ALL = 'all',
 }
 
+/** Capabilities that can be granted through data-mesh governance policies. */
+enum PolicyCapability {
+  PROVISION_KEYSPACE = 'provision-keyspace',
+  REMOVE_KEYSPACE = 'remove-keyspace',
+  MANAGE_SNAPSHOTS = 'manage-snapshots',
+  MANAGE_SEMANTIC = 'manage-semantic',
+  MANAGE_SCHEMA = 'manage-schema',
+  MANAGE_ACCESS = 'manage-access',
+}
+
+/** Keyspace storage types addressable by governance policies. */
+enum PolicyKeyspaceType {
+  IN_MEMORY = 'inmemory',
+  PERSISTENT = 'persistent',
+  DISTRIBUTED = 'distributed',
+}
+
+/** Compiled embedding models supported by Montycat semantic search. */
+enum SemanticModel {
+  MINI_LM = 'minilm',
+  BGE_SMALL = 'bge-small',
+  BGE_BASE = 'bge-base',
+  E5_SMALL = 'e5-small',
+}
+
+/** Serialization formats accepted by policy manifest commands. */
+enum PolicyFormat {
+  JSON = 'json',
+  YAML = 'yaml',
+  YML = 'yml',
+}
+
 /**
  * Represents the configuration and connection details for a communication engine.
  * This class allows you to connect to a MontyCat server and perform operations such as creating stores, managing owners, and granting/revoking permissions.
@@ -182,9 +214,14 @@ class Engine {
    * @returns {Promise<unknown>} A promise that resolves with the result of the grant operation.
    */
   async grantTo({ owner, permission, keyspaces }: {owner: string, permission: ValidPermissions, keyspaces?: string | GenericKV[] | string[] | { keyspace: string }}): Promise<unknown> {
+    const normalizedPermission = String(permission).trim().toLowerCase();
+    const validPermissions = Object.values(ValidPermissions);
+    if (!validPermissions.includes(normalizedPermission as ValidPermissions)) {
+      throw new Error(`Invalid permission: ${permission}. Valid permissions are: ${validPermissions}`);
+    }
 
     const query: RawQuery = {
-      raw: ['grant-to', 'owner', owner, 'permission', permission, 'store', this.store!],
+      raw: ['grant-to', 'owner', owner, 'permission', normalizedPermission, 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
 
@@ -219,14 +256,15 @@ class Engine {
    * @returns {Promise<unknown>} A promise that resolves with the result of the revoke operation.
    */
   async revokeFrom({ owner, permission, keyspaces }: { owner: string; permission: ValidPermissions; keyspaces?: string | string[] | GenericKV[] | { keyspace: string } }): Promise<unknown> {
-    const validPermissions = ['read', 'write', 'all'];
+    const normalizedPermission = String(permission).trim().toLowerCase();
+    const validPermissions = Object.values(ValidPermissions);
 
-    if (!validPermissions.includes(permission)) {
+    if (!validPermissions.includes(normalizedPermission as ValidPermissions)) {
       throw new Error(`Invalid permission: ${permission}. Valid permissions are: ${validPermissions}`);
     }
 
     const query: RawQuery = {
-      raw: ['revoke-from', 'owner', owner, 'permission', permission, 'store', this.store!],
+      raw: ['revoke-from', 'owner', owner, 'permission', normalizedPermission, 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
 
@@ -279,7 +317,8 @@ class Engine {
    * @returns {Promise<unknown>} The server's response describing the enabled
    *                             model and enrolled keyspaces.
    */
-  async enableSemanticSearch({ model, field, store }: { model?: string; field?: string; store?: string } = {}): Promise<unknown> {
+  async enableSemanticSearch({ model, field, store, keyspace }: { model?: SemanticModel; field?: string; store?: string; keyspace?: string } = {}): Promise<unknown> {
+    if (keyspace && !store) throw new Error('A store is required when keyspace is specified');
     const rawQuery: RawQuery = {
       raw: ['enable-semantic-search'],
       credentials: [this.username!, this.password!],
@@ -287,6 +326,7 @@ class Engine {
     if (model) rawQuery.raw.push('model', model);
     if (field) rawQuery.raw.push('field', field);
     if (store) rawQuery.raw.push('store', store);
+    if (keyspace) rawQuery.raw.push('keyspace', keyspace);
 
     return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
   }
@@ -314,16 +354,83 @@ class Engine {
    * @param {string} [options.store] - Restrict the disable to this store only.
    * @returns {Promise<unknown>} The server's response confirming the disable.
    */
-  async disableSemanticSearch({ dropVectors = false, store }: { dropVectors?: boolean; store?: string } = {}): Promise<unknown> {
+  async disableSemanticSearch({ dropVectors = false, store, keyspace }: { dropVectors?: boolean; store?: string; keyspace?: string } = {}): Promise<unknown> {
+    if (keyspace && !store) throw new Error('A store is required when keyspace is specified');
     const rawQuery: RawQuery = {
       raw: ['disable-semantic-search'],
       credentials: [this.username!, this.password!],
     };
     if (dropVectors) rawQuery.raw.push('drop-vectors');
     if (store) rawQuery.raw.push('store', store);
+    if (keyspace) rawQuery.raw.push('keyspace', keyspace);
 
     return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
   }
+
+  private executeRaw(raw: string[]): Promise<unknown> {
+    const query: RawQuery = { raw, credentials: [this.username!, this.password!] };
+    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls);
+  }
+
+  async policyView({ owner, store }: { owner?: string; store?: string } = {}): Promise<unknown> {
+    const raw = ['policy-view'];
+    if (owner) raw.push('owner', owner);
+    if (store) raw.push('store', store);
+    return this.executeRaw(raw);
+  }
+
+  async policyHistory({ owner, store, keyspace }: { owner?: string; store?: string; keyspace?: string } = {}): Promise<unknown> {
+    const raw = ['policy-history'];
+    if (owner) raw.push('owner', owner);
+    if (store) raw.push('store', store);
+    if (keyspace) raw.push('keyspace', keyspace);
+    return this.executeRaw(raw);
+  }
+
+  async policyExplain({ capability, store, owner, keyspace, keyspaceType, model }: { capability: PolicyCapability; store: string; owner?: string; keyspace?: string; keyspaceType?: PolicyKeyspaceType; model?: SemanticModel }): Promise<unknown> {
+    if (keyspaceType && capability === PolicyCapability.MANAGE_SNAPSHOTS) {
+      throw new TypeError('keyspaceType is not valid for manage-snapshots policies; snapshots are always in-memory');
+    }
+    if (model && capability !== PolicyCapability.PROVISION_KEYSPACE && capability !== PolicyCapability.MANAGE_SEMANTIC) {
+      throw new TypeError('model is only valid for provision-keyspace or manage-semantic policies');
+    }
+    const raw = ['policy-explain', 'capability', capability, 'store', store];
+    if (owner) raw.push('owner', owner);
+    if (keyspace && capability !== PolicyCapability.PROVISION_KEYSPACE) raw.push('keyspace', keyspace);
+    if (keyspaceType) raw.push('type', keyspaceType);
+    if (model) raw.push('model', model);
+    return this.executeRaw(raw);
+  }
+
+  private policyMutation(operation: string, { owner, capability, store, keyspace, types = [], models = [] }: { owner: string; capability: PolicyCapability; store: string; keyspace?: string; types?: PolicyKeyspaceType[]; models?: SemanticModel[] }): Promise<unknown> {
+    if (types.length && capability === PolicyCapability.MANAGE_SNAPSHOTS) {
+      throw new TypeError('types is not valid for manage-snapshots policies; snapshots are always in-memory');
+    }
+    if (models.length && capability !== PolicyCapability.PROVISION_KEYSPACE && capability !== PolicyCapability.MANAGE_SEMANTIC) {
+      throw new TypeError('models is only valid for provision-keyspace or manage-semantic policies');
+    }
+    const raw = [operation, 'owner', owner, 'capability', capability, 'store', store];
+    if (keyspace && capability !== PolicyCapability.PROVISION_KEYSPACE) raw.push('keyspace', keyspace);
+    if (types.length) raw.push('types', ...types);
+    if (models.length) raw.push('models', ...models);
+    return this.executeRaw(raw);
+  }
+
+  policyGrant(options: { owner: string; capability: PolicyCapability; store: string; keyspace?: string; types?: PolicyKeyspaceType[]; models?: SemanticModel[] }): Promise<unknown> { return this.policyMutation('policy-grant', options); }
+  policyRevoke(options: { owner: string; capability: PolicyCapability; store: string; keyspace?: string; types?: PolicyKeyspaceType[]; models?: SemanticModel[] }): Promise<unknown> { return this.policyMutation('policy-revoke', options); }
+  policyDeny(options: { owner: string; capability: PolicyCapability; store: string; keyspace?: string; types?: PolicyKeyspaceType[]; models?: SemanticModel[] }): Promise<unknown> { return this.policyMutation('policy-deny', options); }
+  policyRemoveDenial(options: { owner: string; capability: PolicyCapability; store: string; keyspace?: string; types?: PolicyKeyspaceType[]; models?: SemanticModel[] }): Promise<unknown> { return this.policyMutation('policy-remove-denial', options); }
+  policyPreviewGrant(options: { owner: string; capability: PolicyCapability; store: string; keyspace?: string; types?: PolicyKeyspaceType[]; models?: SemanticModel[] }): Promise<unknown> { return this.policyMutation('policy-preview-grant', options); }
+  policyPreviewRevoke(options: { owner: string; capability: PolicyCapability; store: string; keyspace?: string; types?: PolicyKeyspaceType[]; models?: SemanticModel[] }): Promise<unknown> { return this.policyMutation('policy-preview-revoke', options); }
+
+  private policyManifest(operation: string, document: string, format: PolicyFormat = PolicyFormat.JSON): Promise<unknown> {
+    return this.executeRaw([operation, 'format', format, 'document', document]);
+  }
+
+  policyValidate(document: string, format: PolicyFormat = PolicyFormat.JSON): Promise<unknown> { return this.policyManifest('policy-validate', document, format); }
+  policyPlan(document: string, format: PolicyFormat = PolicyFormat.JSON): Promise<unknown> { return this.policyManifest('policy-plan', document, format); }
+  policyApply(document: string, format: PolicyFormat = PolicyFormat.JSON): Promise<unknown> { return this.policyManifest('policy-apply', document, format); }
+  policyExport(format: PolicyFormat = PolicyFormat.JSON): Promise<unknown> { return this.executeRaw(['policy-export', 'format', format]); }
 
   /**
    * Retrieves the structure of the store.
@@ -480,7 +587,7 @@ async function sendData(
   return new Promise((resolve, _reject) => {
     let client: net.Socket | tls.TLSSocket;
     let response = "";
-    const subscriptionMode = message.includes("subscribe");
+    const subscriptionMode = isSubscriptionMessage(message);
     let stopped = false;
 
     const onData = (data: Buffer) => {
@@ -571,6 +678,15 @@ async function sendData(
   });
 }
 
+export function isSubscriptionMessage(message: string): boolean {
+  try {
+    const parsed = JSON.parse(message) as { subscribe?: unknown };
+    return parsed?.subscribe === true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Recursively parses JSON data, handling BigInt and other types.
  * @param {unknown} data - The data to parse.
@@ -601,4 +717,4 @@ function recursiveParseJSON(data: unknown): unknown {
   }
 }
 
-export { Engine, EngineConfig, sendData, ValidPermissions };
+export { Engine, EngineConfig, sendData, ValidPermissions, PolicyCapability, PolicyKeyspaceType, SemanticModel, PolicyFormat };

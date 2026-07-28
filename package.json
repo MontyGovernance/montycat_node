@@ -1,6 +1,6 @@
 {
   "name": "montycat",
-  "version": "1.1.8",
+  "version": "1.2.0",
   "description": "Self-hosted vector database + NoSQL with built-in AI semantic search — the Node.js & TypeScript client for Montycat. A Rust-powered, AI-native Pinecone / Weaviate / Chroma alternative for RAG, AI agents & LLM memory.",
   "type": "module",
   "main": "dist/index.js",
@@ -62,7 +62,8 @@
     "dist"
   ],
   "scripts": {
-    "test": "tsc --noEmit",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "test:coverage": "npm run build && node --test --experimental-test-coverage test/*.test.mjs",
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsc --watch"
