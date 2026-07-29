@@ -368,12 +368,114 @@ const matchingValues = await Sales.semanticSearchGetValuesWhere({
 // value hits: { __key__, __score__, __value__ }
 ```
 
+## 📨 Response Shape
+
+Every call resolves to the same envelope, so there is one thing to check everywhere:
+
+```typescript
+// { status: true,  payload: <result>, error: null }
+// { status: false, payload: null,     error: "Governance permission denied: ..." }
+
+const res = await Sales.insertValue({ value: newSale });
+if (res.status) console.log(res.payload);
+```
+
+`payload` is `null` for commands that only acknowledge, the new key for inserts, and an
+array for lookups and semantic searches. **Keys are u128 and always arrive as strings** —
+never pass one through `Number()`, which silently loses precision above 2^53. Invalid
+arguments `throw` before anything touches the network; server-side failures come back in
+`error` with `status: false`.
+
+## 📡 Real-Time Subscriptions
+
+Subscribe to one key or to a whole keyspace and get pushed every change — the reactive
+core behind live dashboards, analytics, and event-driven services.
+
+```typescript
+// Whole keyspace: omit both key and customKey.
+const handle = await Sales.subscribe({
+  callback: (event) => console.log('changed:', event),
+});
+
+// Or watch a single key (customKey is hashed with XXH32 for you).
+// Passing key and customKey together throws.
+const oneKey = await Sales.subscribe({
+  key: '30442970696809394303186116932586352271',
+  callback: (event) => console.log('changed:', event),
+});
+
+// Stop listening and close the socket. No callback fires after this.
+handle.stop();
+oneKey.stop();
+```
+
+`subscribe` resolves to a handle exposing `stop()`. Subscriptions use the **subscription
+port**, `port + 1` — that is the second port (`21211`) published in the Docker command
+above.
+
+## 🔐 TLS
+
+Set `useTls` on the engine config to negotiate an encrypted connection. It applies to
+commands and subscriptions alike:
+
+```typescript
+const engine = new Engine({
+  store: 'Company',
+  port: 21210,
+  username: 'user',
+  password: 'password',
+  host: '127.0.0.1',
+  useTls: true,
+});
+```
+
+> **Note.** The client sets `rejectUnauthorized: false`, so self-signed certificates are
+> accepted and the server identity is not verified. That is convenient for local and
+> internal deployments; terminate TLS at a trusted proxy where you need certificate
+> validation.
+
+## 👥 Owners & Access
+
+Governance policies below are written against *owners*, so create them first. A
+superowner provisions an owner, then grants data access — optionally narrowed to
+specific keyspaces:
+
+```typescript
+import { ValidPermissions } from 'montycat';
+
+await engine.createOwner({ owner: 'alice', password: 'alice-password' });
+
+await engine.grantTo({ owner: 'alice', permission: ValidPermissions.READ });
+await engine.grantTo({
+  owner: 'alice',
+  permission: ValidPermissions.WRITE,
+  keyspaces: ['Sales'],
+});
+
+await engine.listOwners();
+
+await engine.revokeFrom({
+  owner: 'alice',
+  permission: ValidPermissions.WRITE,
+  keyspaces: ['Sales'],
+});
+await engine.removeOwner({ owner: 'alice' });
+```
+
+`ValidPermissions` is `READ`, `WRITE`, or `ALL`; the tokens are normalized and an
+unknown one throws. `grantTo` and `revokeFrom` apply to the engine's `store`. This
+governs **data access**; to delegate *administrative* capabilities such as provisioning
+keyspaces or managing schemas, see
+[Data-mesh governance](#data-mesh-governance-for-shared-and-multi-tenant-deployments) at
+the end of this document.
+
 ## 🔗 Links
 
 - 🌐 **Website & Docs** — https://montygovernance.com
 - 📦 **npm** — https://www.npmjs.com/package/montycat
 - 🐳 **Docker Hub** — https://hub.docker.com/r/montygovernance/montycat
 - 💻 **Source** — https://github.com/MontyGovernance/montycat_node
+- 📝 **Changelog** — [CHANGELOG.md](CHANGELOG.md)
 
 ## ❓ FAQ
 
