@@ -11,3 +11,4 @@ dist/
 .DS_Store**
 node_modules/
 package-lock.json
+CONNECTION_POOLING_PLAN.md
