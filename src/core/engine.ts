@@ -316,6 +316,9 @@ class Engine {
    *                                   DB-wide enable.
    * @returns {Promise<unknown>} The server's response describing the enabled
    *                             model and enrolled keyspaces.
+   *
+   * An already-enrolled keyspace is not modified. Use
+   * `reembedSemanticSearch` to change its model or field.
    */
   async enableSemanticSearch({ model, field, store, keyspace }: { model?: SemanticModel; field?: string; store?: string; keyspace?: string } = {}): Promise<unknown> {
     if (keyspace && !store) throw new Error('A store is required when keyspace is specified');
@@ -348,9 +351,9 @@ class Engine {
    * @param {boolean} [options.dropVectors=false] - If true, also clear stored
    *                                                vectors — every keyspace's
    *                                                DB-wide, or the scoped store's
-   *                                                when `store` is set. Required
-   *                                                before switching to a different
-   *                                                embedding model.
+   *                                                when `store` is set. Use
+   *                                                `reembedSemanticSearch` for
+   *                                                model replacement.
    * @param {string} [options.store] - Restrict the disable to this store only.
    * @returns {Promise<unknown>} The server's response confirming the disable.
    */
@@ -365,6 +368,36 @@ class Engine {
     if (keyspace) rawQuery.raw.push('keyspace', keyspace);
 
     return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+  }
+
+  /** Read the actual global and per-keyspace semantic configuration. */
+  async getSemanticStatus({ store, keyspace }: { store?: string; keyspace?: string } = {}): Promise<unknown> {
+    if (keyspace && !store) throw new Error('A store is required when keyspace is specified');
+    const raw = ['get-semantic-status'];
+    if (store) raw.push('store', store);
+    if (keyspace) raw.push('keyspace', keyspace);
+    return this.executeRaw(raw);
+  }
+
+  /**
+   * Atomically drop one keyspace's old vectors, replace its semantic
+   * configuration, and start a complete backfill.
+   */
+  async reembedSemanticSearch({
+    model,
+    field,
+    store,
+    keyspace,
+  }: {
+    model: SemanticModel;
+    field?: string;
+    store: string;
+    keyspace: string;
+  }): Promise<unknown> {
+    const raw = ['reembed-semantic-search', 'model', model];
+    if (field) raw.push('field', field);
+    raw.push('store', store, 'keyspace', keyspace);
+    return this.executeRaw(raw);
   }
 
   private executeRaw(raw: string[]): Promise<unknown> {
