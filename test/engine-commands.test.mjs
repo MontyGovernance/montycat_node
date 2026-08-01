@@ -78,6 +78,13 @@ test('builds store, owner, access, and semantic commands', async () => {
       store: 'catalog',
       keyspace: 'products',
     });
+    await engine.getSemanticStatus({ store: 'catalog', keyspace: 'products' });
+    await engine.reembedSemanticSearch({
+      model: SemanticModel.BGE_BASE,
+      field: 'description',
+      store: 'catalog',
+      keyspace: 'products',
+    });
   });
 
   assert.deepEqual(commands.map(({ raw }) => raw), [
@@ -90,6 +97,8 @@ test('builds store, owner, access, and semantic commands', async () => {
     ['revoke-from', 'owner', 'alice', 'permission', 'write', 'store', 'orders', 'keyspaces', 'events'],
     ['enable-semantic-search', 'model', 'bge-small', 'field', 'body', 'store', 'catalog', 'keyspace', 'products'],
     ['disable-semantic-search', 'drop-vectors', 'store', 'catalog', 'keyspace', 'products'],
+    ['get-semantic-status', 'store', 'catalog', 'keyspace', 'products'],
+    ['reembed-semantic-search', 'model', 'bge-base', 'field', 'description', 'store', 'catalog', 'keyspace', 'products'],
   ]);
   assert.deepEqual(commands[0].credentials, ['owner', 'secret']);
 
@@ -100,6 +109,10 @@ test('builds store, owner, access, and semantic commands', async () => {
   );
   await assert.rejects(
     engine.disableSemanticSearch({ keyspace: 'products' }),
+    /store is required/,
+  );
+  await assert.rejects(
+    engine.getSemanticStatus({ keyspace: 'products' }),
     /store is required/,
   );
   await assert.rejects(

@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.2.2 - 2026-07-31
+
+Adds a way to read the server's real semantic configuration, and a safe way to
+change an enrolled keyspace's embedding model. Additive — upgrading from 1.2.1
+requires no code changes.
+
+### Added
+
+- `Engine.getSemanticStatus({ store, keyspace })` returns the server's actual
+  semantic settings rather than what the caller assumed: the DB-wide switch and
+  default model, plus each enrolled keyspace's model, dimensions, field,
+  storage type, and whether a backfill is still pending.
+- `Engine.reembedSemanticSearch({ model, field, store, keyspace })` atomically
+  drops one keyspace's vectors, records the new configuration, and starts a
+  complete backfill. It reports the previous model alongside the new one, so a
+  caller can confirm what it replaced.
+
+### Changed
+
+- Documented that `enableSemanticSearch` leaves an already-enrolled keyspace
+  alone. It was never a way to switch models; `reembedSemanticSearch` is.
+  Behavior is unchanged — only the documentation was misleading.
+- Corrected the `disableSemanticSearch` docs: `dropVectors` is not "required
+  before switching to a different embedding model". Use
+  `reembedSemanticSearch`, which does not leave the keyspace unsearchable in
+  between.
+
 ## 1.2.1 - 2026-07-29
 
 Documentation and CI only — no library code changed, so upgrading from 1.2.0 is

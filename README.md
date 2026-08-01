@@ -337,8 +337,25 @@ const keys = await Sales.semanticSearchGetKeys({ query: 'Show all Bluetooth devi
 const strong = await Sales.semanticSearchGetKeys({ query: 'Show all Bluetooth devices', limitOutput: { start: 0, stop: 5 }, minScore: 0.35 });
 
 // Control the DB-wide switch (optional — it's already on):
-// switch the embedding model: 'minilm' | 'bge-small' (default) | 'bge-base' | 'e5-small'
-await engine.enableSemanticSearch({ model: SemanticModel.BGE_BASE });
+// Read back the model and backfill state actually assigned to a keyspace.
+const status = await engine.getSemanticStatus({
+  store: 'catalog',
+  keyspace: 'products',
+});
+
+// Enable an unenrolled keyspace with an explicit model.
+await engine.enableSemanticSearch({
+  model: SemanticModel.BGE_BASE,
+  store: 'catalog',
+  keyspace: 'products',
+});
+
+// Changing an enrolled keyspace is destructive and starts a full backfill.
+await engine.reembedSemanticSearch({
+  model: SemanticModel.BGE_BASE,
+  store: 'catalog',
+  keyspace: 'products',
+});
 
 // turn it off (vectors are kept so re-enabling resumes instantly;
 // pass { dropVectors: true } to also clear stored vectors)
