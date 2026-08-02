@@ -2,6 +2,7 @@ import net from 'net';
 import JSONbigBase from 'json-bigint';
 import GenericKV from '../classes/generic.js';
 import tls from "tls";
+import { ConnectionPool, PoolConfig, PooledConnection, WriteFailed, closeAllPools, getPool } from './pool.js';
 
 const JSONbig = JSONbigBase({ storeAsString: true });
 
@@ -15,6 +16,15 @@ interface EngineConfig {
   password?: string | null;
   store?: string | null;
   useTls?: boolean;
+  /**
+   * Enables connection pooling for request/response traffic. Absent (the
+   * default) opens a connection per request, exactly as before.
+   *
+   * Pools live in a module-level registry keyed by `(host, port, useTls)`, so
+   * every keyspace class pointing at one server shares a single pool.
+   * Subscriptions are never pooled. Call `closeAllPools()` before exit.
+   */
+  pool?: PoolConfig | null;
 }
 
 /** * Interface for raw query structure.
@@ -89,14 +99,17 @@ class Engine {
   private password: string | null;
   private store: string | null;
   public useTls: boolean | undefined;
+  /** Pooling config, or null/undefined for connect-per-request. */
+  public pool: PoolConfig | null | undefined;
 
-  constructor({ host = null, port = null, username = null, password = null, store = null, useTls = false }: EngineConfig = {}) {
+  constructor({ host = null, port = null, username = null, password = null, store = null, useTls = false, pool = null }: EngineConfig = {}) {
     this.host = host;
     this.port = port;
     this.username = username;
     this.password = password;
     this.store = store;
     this.useTls = useTls;
+    this.pool = pool;
   }
 
   /**
@@ -105,7 +118,7 @@ class Engine {
    * @param {string} uri - The URI string to parse.
    * @returns {Engine} An instance of the Engine class configured with the parsed values.
    */
-  static fromUri(uri: string): Engine {
+  static fromUri(uri: string, pool: PoolConfig | null = null): Engine {
     if (!uri.startsWith("montycat://")) {
       throw new Error("URI must use 'montycat://' protocol");
     }
@@ -141,6 +154,7 @@ class Engine {
       password,
       store: store || null,
       useTls: false,
+      pool,
     });
   }
 
@@ -155,7 +169,7 @@ class Engine {
       raw: ['create-store', 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   /**
@@ -169,7 +183,7 @@ class Engine {
       raw: ['remove-store', 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   /**
@@ -183,7 +197,7 @@ class Engine {
       raw: ['create-owner', 'username', owner, 'password', password],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   async removeOwner({ owner }: { owner: string }): Promise<unknown> {
@@ -191,7 +205,7 @@ class Engine {
       raw: ['remove-owner', 'username', owner],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   /**
@@ -203,7 +217,7 @@ class Engine {
       raw: ['list-owners'],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   /**
@@ -245,7 +259,7 @@ class Engine {
       }
     }
 
-    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls, this.pool);
   }
 
   /**
@@ -286,7 +300,7 @@ class Engine {
       }
     }
 
-    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls, this.pool);
   }
 
   /**
@@ -331,7 +345,7 @@ class Engine {
     if (store) rawQuery.raw.push('store', store);
     if (keyspace) rawQuery.raw.push('keyspace', keyspace);
 
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   /**
@@ -367,7 +381,7 @@ class Engine {
     if (store) rawQuery.raw.push('store', store);
     if (keyspace) rawQuery.raw.push('keyspace', keyspace);
 
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   /** Read the actual global and per-keyspace semantic configuration. */
@@ -402,7 +416,7 @@ class Engine {
 
   private executeRaw(raw: string[]): Promise<unknown> {
     const query: RawQuery = { raw, credentials: [this.username!, this.password!] };
-    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls, this.pool);
   }
 
   async policyView({ owner, store }: { owner?: string; store?: string } = {}): Promise<unknown> {
@@ -477,7 +491,7 @@ class Engine {
       raw: ['get-structure-available', ...storePart],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   /**
@@ -492,7 +506,7 @@ class Engine {
       raw: ['enable-wait-for-index'],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   /**
@@ -507,7 +521,7 @@ class Engine {
       raw: ['disable-wait-for-index'],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   /** Internal helper for no-argument superowner raw commands. */
@@ -516,7 +530,7 @@ class Engine {
       raw: [command],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   /**
@@ -572,7 +586,7 @@ class Engine {
       raw: ['snapshot-rate', String(rate)],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 
   /**
@@ -586,7 +600,7 @@ class Engine {
       raw: ['expiration-check', String(rate)],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
   }
 }
 
@@ -615,7 +629,14 @@ async function sendData(
   message: string,
   callback?: (data: unknown) => void,
   useTls: boolean = false,
+  poolConfig?: PoolConfig | null,
 ): Promise<unknown | SubscriptionHandle> {
+  // Subscriptions are never pooled (contract §5): they are long-lived, stream
+  // many responses to one request, and live on the `port + 1` subscription port.
+  if (!isSubscriptionMessage(message)) {
+    const pooled = await pooledRequest(host, port, message, useTls, poolConfig);
+    if (pooled !== NOT_POOLED) return pooled;
+  }
 
   return new Promise((resolve, _reject) => {
     let client: net.Socket | tls.TLSSocket;
@@ -709,6 +730,96 @@ async function sendData(
       tcpSocket.connect(port, host, () => finalizeConnect(tcpSocket));
     }
   });
+}
+
+/** Sentinel meaning "pooling is off — fall through to the per-request path". */
+const NOT_POOLED = Symbol('not-pooled');
+
+const REQUEST_TIMEOUT_MS = 120000;
+
+/** Open one connection and wrap it for pooling. */
+function openPooled(
+  host: string,
+  port: number,
+  useTls: boolean,
+): Promise<PooledConnection> {
+  return new Promise((resolve, reject) => {
+    if (useTls) {
+      const socket = tls.connect({ host, port, rejectUnauthorized: false }, () => {
+        clearTimeout(handshake);
+        resolve(new PooledConnection(socket));
+      });
+      const handshake = setTimeout(() => {
+        socket.destroy();
+        reject(new Error('TLS handshake timeout'));
+      }, 10000);
+      socket.once('error', (err) => {
+        clearTimeout(handshake);
+        reject(err);
+      });
+    } else {
+      const socket = new net.Socket();
+      socket.once('error', reject);
+      socket.connect(port, host, () => {
+        socket.removeListener('error', reject);
+        resolve(new PooledConnection(socket));
+      });
+    }
+  });
+}
+
+/**
+ * Request/response over a pooled connection.
+ *
+ * Returns `NOT_POOLED` when pooling is disabled, so the caller falls through to
+ * the original per-request implementation and behaviour is unchanged by default.
+ *
+ * Errors resolve as strings, matching what this client has always returned,
+ * rather than rejecting — changing that would break every existing caller.
+ */
+async function pooledRequest(
+  host: string,
+  port: number,
+  message: string,
+  useTls: boolean,
+  poolConfig: PoolConfig | undefined | null,
+): Promise<unknown | typeof NOT_POOLED> {
+  const pool = getPool(host, port, useTls, poolConfig);
+  if (!pool) return NOT_POOLED;
+
+  const leased = pool.checkout();
+  if (leased) {
+    try {
+      const line = await leased.request(message, REQUEST_TIMEOUT_MS);
+      pool.checkin(leased);
+      return recursiveParseJSON(line);
+    } catch (err) {
+      leased.destroy();
+      if (!(err instanceof WriteFailed)) {
+        // Never retry a read failure: the engine may have applied the write and
+        // only the response was lost. These commands are not idempotent and the
+        // wire has no request IDs, so replaying would duplicate data (§4).
+        return `Connection error: ${(err as Error).message}`;
+      }
+      // A write failure transmitted nothing, so replaying below is safe.
+    }
+  }
+
+  let conn: PooledConnection;
+  try {
+    conn = await openPooled(host, port, useTls);
+  } catch (err) {
+    return `Connection error: ${(err as Error).message}`;
+  }
+
+  try {
+    const line = await conn.request(message, REQUEST_TIMEOUT_MS);
+    pool.checkin(conn);
+    return recursiveParseJSON(line);
+  } catch (err) {
+    conn.destroy();
+    return `Connection error: ${(err as Error).message}`;
+  }
 }
 
 export function isSubscriptionMessage(message: string): boolean {

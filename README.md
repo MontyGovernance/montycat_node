@@ -403,6 +403,53 @@ never pass one through `Number()`, which silently loses precision above 2^53. In
 arguments `throw` before anything touches the network; server-side failures come back in
 `error` with `status: false`.
 
+## 🔄 Connection Pooling
+
+By default every request opens a TCP connection, sends, reads one response, and closes.
+Reuse the connection instead and the handshake disappears from every call after the
+first. The win scales with how much of your latency is connection setup: large for a
+chatty service issuing many small reads, larger over a network — where the handshake
+costs a full round trip before the query is even sent — and larger again with TLS.
+
+Pooling is opt-in. One new field, and no call site changes:
+
+```typescript
+import { Engine, closeAllPools } from 'montycat';
+
+const engine = new Engine({
+  host: '127.0.0.1', port: 21210, username: 'user', password: 'password',
+  store: 'Company',
+  pool: {},                      // ← the only new field
+});
+
+Sales.connectEngine(engine);
+await Sales.insertValue({ value: newSale });   // unchanged
+
+closeAllPools();                 // before exit
+```
+
+Tune it if you need to:
+
+```typescript
+pool: { maxIdle: 4, idleTimeoutMs: 15000 }     // defaults: 8, 30000
+```
+
+**Pools are shared per `(host, port, useTls)`.** They live in a module-level registry,
+not on the `Engine`, so two keyspace classes pointing at the same server share one pool
+rather than each opening its own. `useTls` is part of the key — a plaintext and a TLS
+connection to one address are not interchangeable.
+
+**Keep `maxIdle` modest.** An idle pooled connection still holds one of the engine's
+connection permits. The defaults are deliberately small; raise them only after measuring
+with `queueDepths()` under realistic load.
+
+**Call `closeAllPools()` before exit**, otherwise idle sockets keep the process alive.
+
+Subscriptions are never pooled — they are long-lived, stream many responses to one
+request, and live on their own port. A connection is held exclusively for one
+request/response, so concurrent calls each get their own rather than interleaving writes
+on one socket.
+
 ## 📡 Real-Time Subscriptions
 
 Subscribe to one key or to a whole keyspace and get pushed every change — the reactive

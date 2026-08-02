@@ -35,8 +35,13 @@ class GenericKV {
         return this.name;
     }
 
-    static connectEngine(engine: any) {
+    static connectEngine(engine: { pool?: unknown }) {
         Object.assign(this, engine);
+        // Copied explicitly rather than left to Object.assign. Only the *config*
+        // travels here; the pool itself lives in a module-level registry keyed
+        // by (host, port, useTls), so every keyspace class pointing at one
+        // server shares a single pool instead of each getting its own.
+        (this as any).pool = (engine as any).pool ?? null;
     }
 
     /**
