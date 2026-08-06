@@ -41,6 +41,40 @@ behavior is unchanged until you enable it.
 
   Exported `closeAllPools` and the `PoolConfig` type from the package root.
 
+- **Precomputed vectors.** Vectors produced elsewhere — another model, a batch
+  pipeline, an existing embedding store — can now be supplied directly, and the
+  server skips embedding entirely. Requires a Montycat Semantic server 1.3.0 or
+  newer.
+
+  Writes take an optional `vector`, applied after the write succeeds:
+
+  ```ts
+  await Docs.insertValue({
+    value: { text: 'a document' },
+    vector: myEmbedding,          // number[], omit for server-side embedding
+  });
+  ```
+
+  Available on `insertValue`, `insertCustomKeyValue`, and `updateValue` for both
+  in-memory and persistent keyspaces. `insertBulk` takes `vectors: number[][]`,
+  paired with `bulk` **by position**; `updateBulk` takes `vectors` for numeric
+  keys and `customVectors` for custom keys.
+
+  Search takes an optional query `vector`, which bypasses text embedding. The
+  query string may be empty when one is supplied:
+
+  ```ts
+  await Docs.semanticSearchGetValues({ query: '', vector: myQueryEmbedding });
+  ```
+
+  Available on `semanticSearchGetKeys`, `semanticSearchGetKeysWhere`,
+  `semanticSearchGetValues`, and `semanticSearchGetValuesWhere`.
+
+  Dimensions must match the keyspace's enrolled model; the server validates
+  before anything reaches the index. A supplied vector is not overwritten by
+  background embedding — a later ordinary write to the same item clears that
+  protection and re-embeds from text.
+
 ### Changed
 
 - **The response reader no longer re-splits an accumulating string.** It
