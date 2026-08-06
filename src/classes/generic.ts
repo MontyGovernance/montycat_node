@@ -190,9 +190,12 @@ class GenericKV {
      * Updates a bulk of keys and values in the keyspace.
      * @param bulkKeysValues - An object where keys are the keys to update and values are the new values.
      * @param bulkCustomKeysValues - An object where custom keys are the keys to update and values are the new values.
+     * @param vectors - Numeric keys mapped to precomputed vectors.
+     * @param customVectors - Custom keys mapped to precomputed vectors; keys are converted before sending.
+     * @param waitForIndex - Optional override for waiting until indexes are updated.
      * @return A promise that resolves with the result of the update.
      */
-    static async updateBulk({ bulkKeysValues = {}, bulkCustomKeysValues = {}, waitForIndex = null }: { bulkKeysValues?: { [key: string]: any }; bulkCustomKeysValues?: { [key: string]: any }; waitForIndex?: boolean | null } = {}): Promise<any> {
+    static async updateBulk({ bulkKeysValues = {}, bulkCustomKeysValues = {}, vectors = {}, customVectors = {}, waitForIndex = null }: { bulkKeysValues?: { [key: string]: any }; bulkCustomKeysValues?: { [key: string]: any }; vectors?: Record<string, number[]>; customVectors?: Record<string, number[]>; waitForIndex?: boolean | null } = {}): Promise<any> {
         try {
             if (Object.keys(bulkCustomKeysValues).length) {
                 bulkKeysValues = { ...bulkKeysValues, ...convertCustomKeysValues(bulkCustomKeysValues) };
@@ -203,7 +206,8 @@ class GenericKV {
             }
 
             this.command = "update_bulk";
-            const query = convertToBinaryQuery(this, { bulkKeysValues, waitForIndex });
+            const semanticVectors = { ...vectors, ...convertCustomKeysValues(customVectors) };
+            const query = convertToBinaryQuery(this, { bulkKeysValues, semanticVectors, waitForIndex });
             return runQuery(this, query);
         } catch (err) {
             throw err;
@@ -254,14 +258,18 @@ class GenericKV {
      * public methods differ only in which value-inclusion flags they pass,
      * so the wire call lives here once.
      */
-    private static async semanticSearchCore(query: string, limitOutput: { start: number; stop: number }, minScore: number | null, filters: object | null, withPointers: boolean, keyIncluded: boolean, pointersMetadata: boolean): Promise<any> {
-        if (!query || !query.trim()) {
+    private static async semanticSearchCore(query: string, vector: number[] | null, limitOutput: { start: number; stop: number }, minScore: number | null, filters: object | null, withPointers: boolean, keyIncluded: boolean, pointersMetadata: boolean): Promise<any> {
+        if (vector === null && (!query || !query.trim())) {
             throw new Error("No query text provided for semantic search.");
+        }
+        if (vector !== null && (vector.length === 0 || vector.some(value => !Number.isFinite(value)))) {
+            throw new Error("Semantic vector must contain only finite numbers.");
         }
 
         this.command = "semantic_search";
         const binaryQuery = convertToBinaryQuery(this, {
             semanticQuery: query,
+            semanticVector: vector,
             limitOutput,
             minScore,
             semanticFilter: filters,
@@ -285,15 +293,16 @@ class GenericKV {
      * The keyspace is embedded in the background as items are written, so
      * results reflect whatever has been embedded so far.
      *
-     * @param query - The natural-language query text to embed and search for.
+     * @param query - Query text; it may be empty when `vector` is supplied.
+     * @param vector - Optional precomputed query vector that bypasses text embedding.
      * @param limitOutput - Start/stop over the ranked hits; `{start: 0, stop: 0}`
      *                      (the default) lets the server apply its default top-k (10).
      * @param minScore - Drop hits whose cosine similarity (in [-1, 1]) is below
      *                   this value. Default null (no score filter).
      * @return A promise resolving with ranked hits, each `{__key__, __score__}`.
      */
-    static async semanticSearchGetKeys({ query, limitOutput = { start: 0, stop: 0 }, minScore = null }: { query: string; limitOutput?: { start: number; stop: number }; minScore?: number | null }): Promise<any> {
-        return this.semanticSearchCore(query, limitOutput, minScore, null, false, false, false);
+    static async semanticSearchGetKeys({ query, vector = null, limitOutput = { start: 0, stop: 0 }, minScore = null }: { query: string; vector?: number[] | null; limitOutput?: { start: number; stop: number }; minScore?: number | null }): Promise<any> {
+        return this.semanticSearchCore(query, vector, limitOutput, minScore, null, false, false, false);
     }
 
     /**
@@ -309,19 +318,20 @@ class GenericKV {
      * A separate method (not a parameter on `semanticSearchGetKeys`) so
      * existing integrations keep their exact signature.
      *
-     * @param query - The natural-language query text to embed and search for.
+     * @param query - Query text; it may be empty when `vector` is supplied.
      * @param filters - Metadata criteria, same shape as `lookupKeysWhere`.
+     * @param vector - Optional precomputed query vector that bypasses text embedding.
      * @param limitOutput - Start/stop over the ranked hits; `{start: 0, stop: 0}`
      *                      (the default) lets the server apply its default top-k (10).
      * @param minScore - Drop hits whose cosine similarity (in [-1, 1]) is below
      *                   this value. Default null (no score filter).
      * @return A promise resolving with ranked hits, each `{__key__, __score__}`.
      */
-    static async semanticSearchGetKeysWhere({ query, filters, limitOutput = { start: 0, stop: 0 }, minScore = null }: { query: string; filters: object; limitOutput?: { start: number; stop: number }; minScore?: number | null }): Promise<any> {
+    static async semanticSearchGetKeysWhere({ query, filters, vector = null, limitOutput = { start: 0, stop: 0 }, minScore = null }: { query: string; filters: object; vector?: number[] | null; limitOutput?: { start: number; stop: number }; minScore?: number | null }): Promise<any> {
         if (!filters || Object.keys(filters).length === 0) {
             throw new Error("No filters provided for hybrid semantic search.");
         }
-        return this.semanticSearchCore(query, limitOutput, minScore, filters, false, false, false);
+        return this.semanticSearchCore(query, vector, limitOutput, minScore, filters, false, false, false);
     }
 
     /**
@@ -336,7 +346,8 @@ class GenericKV {
      * The keyspace is embedded in the background as items are written, so
      * results reflect whatever has been embedded so far.
      *
-     * @param query - The natural-language query text to embed and search for.
+     * @param query - Query text; it may be empty when `vector` is supplied.
+     * @param vector - Optional precomputed query vector that bypasses text embedding.
      * @param limitOutput - Start/stop over the ranked hits; `{start: 0, stop: 0}`
      *                      (the default) lets the server apply its default top-k (10).
      * @param minScore - Drop hits whose cosine similarity (in [-1, 1]) is below
@@ -349,8 +360,8 @@ class GenericKV {
      *         `{__key__, __score__, __value__}` — the same dunder envelope
      *         `lookupValuesWhere` returns with `keyIncluded: true`, plus the score.
      */
-    static async semanticSearchGetValues({ query, limitOutput = { start: 0, stop: 0 }, minScore = null, withPointers = false, pointersMetadata = false }: { query: string; limitOutput?: { start: number; stop: number }; minScore?: number | null; withPointers?: boolean; pointersMetadata?: boolean }): Promise<any> {
-        return this.semanticSearchCore(query, limitOutput, minScore, null, withPointers, true, pointersMetadata);
+    static async semanticSearchGetValues({ query, vector = null, limitOutput = { start: 0, stop: 0 }, minScore = null, withPointers = false, pointersMetadata = false }: { query: string; vector?: number[] | null; limitOutput?: { start: number; stop: number }; minScore?: number | null; withPointers?: boolean; pointersMetadata?: boolean }): Promise<any> {
+        return this.semanticSearchCore(query, vector, limitOutput, minScore, null, withPointers, true, pointersMetadata);
     }
 
     /**
@@ -366,8 +377,9 @@ class GenericKV {
      * A separate method (not a parameter on `semanticSearchGetValues`) so
      * existing integrations keep their exact signature.
      *
-     * @param query - The natural-language query text to embed and search for.
+     * @param query - Query text; it may be empty when `vector` is supplied.
      * @param filters - Metadata criteria, same shape as `lookupKeysWhere`.
+     * @param vector - Optional precomputed query vector that bypasses text embedding.
      * @param limitOutput - Start/stop over the ranked hits; `{start: 0, stop: 0}`
      *                      (the default) lets the server apply its default top-k (10).
      * @param minScore - Drop hits whose cosine similarity (in [-1, 1]) is below
@@ -380,11 +392,11 @@ class GenericKV {
      *         `{__key__, __score__, __value__}` — the same dunder envelope
      *         `lookupValuesWhere` returns with `keyIncluded: true`, plus the score.
      */
-    static async semanticSearchGetValuesWhere({ query, filters, limitOutput = { start: 0, stop: 0 }, minScore = null, withPointers = false, pointersMetadata = false }: { query: string; filters: object; limitOutput?: { start: number; stop: number }; minScore?: number | null; withPointers?: boolean; pointersMetadata?: boolean }): Promise<any> {
+    static async semanticSearchGetValuesWhere({ query, filters, vector = null, limitOutput = { start: 0, stop: 0 }, minScore = null, withPointers = false, pointersMetadata = false }: { query: string; filters: object; vector?: number[] | null; limitOutput?: { start: number; stop: number }; minScore?: number | null; withPointers?: boolean; pointersMetadata?: boolean }): Promise<any> {
         if (!filters || Object.keys(filters).length === 0) {
             throw new Error("No filters provided for hybrid semantic search.");
         }
-        return this.semanticSearchCore(query, limitOutput, minScore, filters, withPointers, true, pointersMetadata);
+        return this.semanticSearchCore(query, vector, limitOutput, minScore, filters, withPointers, true, pointersMetadata);
     }
 
     /**

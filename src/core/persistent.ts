@@ -20,11 +20,12 @@ class Persistent extends GenericKV {
     /**
      * Inserts a value into the persistent store.
      * @param value - The value to insert.
+     * @param vector - Optional precomputed vector that bypasses server-side embedding.
      * @return A promise that resolves with the result of the insertion.
      */
-    static async insertValue({ value = {}, waitForIndex = null }: { value?: any; waitForIndex?: boolean | null } = {}): Promise<any> {
+    static async insertValue({ value = {}, vector = null, waitForIndex = null }: { value?: any; vector?: number[] | null; waitForIndex?: boolean | null } = {}): Promise<any> {
         this.command = "insert_value";
-        const query = convertToBinaryQuery(this, { value, waitForIndex });
+        const query = convertToBinaryQuery(this, { value, semanticVector: vector, waitForIndex });
         return runQuery(this, query);
     }
 
@@ -50,15 +51,16 @@ class Persistent extends GenericKV {
      * Inserts a custom key-value pair into the persistent store.
      * @param customKey - The custom key for the value.
      * @param value - The value to insert.
+     * @param vector - Optional precomputed vector that bypasses server-side embedding.
      * @param waitForIndex - Per-request synchronous-index override; null (default) uses the DB-wide default.
      * @return A promise that resolves with the result of the insertion.
      */
-    static async insertCustomKeyValue({ customKey, value = {}, waitForIndex = null }: { customKey: string; value?: any; waitForIndex?: boolean | null }): Promise<any> {
+    static async insertCustomKeyValue({ customKey, value = {}, vector = null, waitForIndex = null }: { customKey: string; value?: any; vector?: number[] | null; waitForIndex?: boolean | null }): Promise<any> {
         if (!customKey) {
             throw new Error("No key provided");
         }
         this.command = "insert_custom_key_value";
-        const query = convertToBinaryQuery(this, { key: convertCustomKey(customKey), value, waitForIndex });
+        const query = convertToBinaryQuery(this, { key: convertCustomKey(customKey), value, semanticVector: vector, waitForIndex });
         return runQuery(this, query);
     }
 
@@ -67,10 +69,11 @@ class Persistent extends GenericKV {
      * @param key - The key for the value to update.
      * @param customKey - The custom key for the value to update.
      * @param value - The new value to set.
+     * @param vector - Optional replacement precomputed vector.
      * @param waitForIndex - Per-request synchronous-index override; null (default) uses the DB-wide default.
      * @return A promise that resolves with the result of the update.
      */
-    static async updateValue({ key = "", customKey = null, value = {}, waitForIndex = null }: { key?: string; customKey?: string | null; value?: any; waitForIndex?: boolean | null } = {}): Promise<any> {
+    static async updateValue({ key = "", customKey = null, value = {}, vector = null, waitForIndex = null }: { key?: string; customKey?: string | null; value?: any; vector?: number[] | null; waitForIndex?: boolean | null } = {}): Promise<any> {
 
         const effectiveKey = customKey ? convertCustomKey(customKey) : key;
         if (!effectiveKey) {
@@ -78,22 +81,23 @@ class Persistent extends GenericKV {
         }
 
         this.command = "update_value";
-        const query = convertToBinaryQuery(this, { key: effectiveKey, value, waitForIndex });
+        const query = convertToBinaryQuery(this, { key: effectiveKey, value, semanticVector: vector, waitForIndex });
         return runQuery(this, query);
     }
 
     /**
      * Inserts multiple key-value pairs into the persistent store in bulk.
      * @param bulk - An array of key-value pairs to insert.
+     * @param vectors - Optional precomputed vectors paired with `bulk` by position.
      * @param waitForIndex - Per-request synchronous-index override; null (default) uses the DB-wide default.
      * @return A promise that resolves with the result of the bulk insertion.
      */
-    static async insertBulk({ bulk = [], waitForIndex = null }: { bulk?: any[]; waitForIndex?: boolean | null } = {}): Promise<any> {
+    static async insertBulk({ bulk = [], vectors = [], waitForIndex = null }: { bulk?: any[]; vectors?: number[][]; waitForIndex?: boolean | null } = {}): Promise<any> {
         if (!bulk || bulk.length === 0) {
             throw new Error("No values provided");
         }
         this.command = "insert_bulk";
-        const query = convertToBinaryQuery(this, { bulkValues: bulk, waitForIndex });
+        const query = convertToBinaryQuery(this, { bulkValues: bulk, semanticVectorList: vectors, waitForIndex });
         return runQuery(this, query);
     }
 
