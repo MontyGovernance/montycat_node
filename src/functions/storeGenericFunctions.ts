@@ -89,6 +89,9 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
         semanticQuery = null,
         minScore = null,
         semanticFilter = null,
+        semanticVector = null,
+        semanticVectors = {},
+        semanticVectorList = [],
         waitForIndex = null,
     } = options;
 
@@ -137,6 +140,9 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
     if (semanticFilter !== null) {
         queryDict.semantic_filter = JSON.stringify(processSearchCriteria(semanticFilter));
     }
+    if (semanticVector !== null) queryDict.semantic_vector = semanticVector;
+    if (Object.keys(semanticVectors).length > 0) queryDict.semantic_vectors = semanticVectors;
+    if (semanticVectorList.length > 0) queryDict.semantic_vector_list = semanticVectorList;
 
     // Per-request wait_for_index override for persistent writes; omit when null
     // so the server falls back to its DB-wide default (existing wire unchanged).
@@ -232,7 +238,8 @@ function processBulkValues(bulkValues: any[]) {
  */
 async function runQuery(cls: any, query: string, callback?: (data: any) => void, subscribe = false): Promise<unknown> {
     const port = subscribe ? cls.port + 1 : cls.port;
-    return sendData(cls.host, port, query, callback, cls.useTls);
+    // Subscriptions are never pooled; sendData routes on that internally.
+    return sendData(cls.host, port, query, callback, cls.useTls, cls.pool);
 }
 
 /**

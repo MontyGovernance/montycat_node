@@ -385,6 +385,47 @@ const matchingValues = await Sales.semanticSearchGetValuesWhere({
 // value hits: { __key__, __score__, __value__ }
 ```
 
+### Bring your own vectors
+
+If you already have embeddings — from another model, a batch pipeline, or an
+existing vector store — supply them directly and the server skips embedding.
+Needs a Montycat Semantic server 1.3.0 or newer.
+
+```ts
+// Writing: pass `vector` alongside the value.
+await Sales.insertValue({
+  value: { text: 'The Voyager probes left the heliosphere.' },
+  vector: myEmbedding,                     // number[]
+});
+
+// Bulk: paired with `bulk` by position.
+await Sales.insertBulk({
+  bulk: [doc1, doc2],
+  vectors: [embedding1, embedding2],
+});
+
+// Searching: pass a query vector; the query string may be empty.
+const hits = await Sales.semanticSearchGetValues({
+  query: '',
+  vector: myQueryEmbedding,
+  limitOutput: { start: 0, stop: 10 },
+});
+```
+
+`vector` is also accepted by `insertCustomKeyValue` and `updateValue`, and
+`updateBulk` takes `vectors` for numeric keys plus `customVectors` for custom
+keys. All four `semanticSearch*` methods accept a query vector.
+
+Dimensions must match the keyspace's enrolled model — the server validates
+before anything reaches the index, so a bad entry in a batch cannot leave the
+graph and the durable store disagreeing. A vector you supplied will not be
+overwritten by background embedding; a later ordinary write to that item clears
+the protection and re-embeds from its text, which is when re-embedding is what
+you want.
+
+Mixing is fine: items with supplied vectors and items the server embeds can
+live in one keyspace, as long as every vector comes from the same model.
+
 ## 📨 Response Shape
 
 Every call resolves to the same envelope, so there is one thing to check everywhere:
@@ -402,6 +443,53 @@ array for lookups and semantic searches. **Keys are u128 and always arrive as st
 never pass one through `Number()`, which silently loses precision above 2^53. Invalid
 arguments `throw` before anything touches the network; server-side failures come back in
 `error` with `status: false`.
+
+## 🔄 Connection Pooling
+
+By default every request opens a TCP connection, sends, reads one response, and closes.
+Reuse the connection instead and the handshake disappears from every call after the
+first. The win scales with how much of your latency is connection setup: large for a
+chatty service issuing many small reads, larger over a network — where the handshake
+costs a full round trip before the query is even sent — and larger again with TLS.
+
+Pooling is opt-in. One new field, and no call site changes:
+
+```typescript
+import { Engine, closeAllPools } from 'montycat';
+
+const engine = new Engine({
+  host: '127.0.0.1', port: 21210, username: 'user', password: 'password',
+  store: 'Company',
+  pool: {},                      // ← the only new field
+});
+
+Sales.connectEngine(engine);
+await Sales.insertValue({ value: newSale });   // unchanged
+
+closeAllPools();                 // before exit
+```
+
+Tune it if you need to:
+
+```typescript
+pool: { maxIdle: 4, idleTimeoutMs: 15000 }     // defaults: 8, 30000
+```
+
+**Pools are shared per `(host, port, useTls)`.** They live in a module-level registry,
+not on the `Engine`, so two keyspace classes pointing at the same server share one pool
+rather than each opening its own. `useTls` is part of the key — a plaintext and a TLS
+connection to one address are not interchangeable.
+
+**Keep `maxIdle` modest.** An idle pooled connection still holds one of the engine's
+connection permits. The defaults are deliberately small; raise them only after measuring
+with `queueDepths()` under realistic load.
+
+**Call `closeAllPools()` before exit**, otherwise idle sockets keep the process alive.
+
+Subscriptions are never pooled — they are long-lived, stream many responses to one
+request, and live on their own port. A connection is held exclusively for one
+request/response, so concurrent calls each get their own rather than interleaving writes
+on one socket.
 
 ## 📡 Real-Time Subscriptions
 

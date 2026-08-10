@@ -76,6 +76,9 @@ test('serializes store queries and optional semantic fields', () => {
       parent: new Pointer({ keyspace, key: 'root' }),
       active: true,
     },
+    semanticVector: [0.1, 0.2],
+    semanticVectors: { 7: [0.3, 0.4] },
+    semanticVectorList: [[0.5, 0.6]],
     waitForIndex: true,
   }));
 
@@ -83,6 +86,9 @@ test('serializes store queries and optional semantic fields', () => {
   assert.equal(query.search_criteria, 'launch');
   assert.equal(query.min_score, 0.7);
   assert.equal(query.wait_for_index, true);
+  assert.deepEqual(query.semantic_vector, [0.1, 0.2]);
+  assert.deepEqual(query.semantic_vectors, { 7: [0.3, 0.4] });
+  assert.deepEqual(query.semantic_vector_list, [[0.5, 0.6]]);
   assert.deepEqual(JSON.parse(query.value), {
     parent: ['events', convertCustomKey('root')],
     createdAt: 'now',
@@ -130,6 +136,14 @@ test('GenericKV rejects ambiguous and incomplete requests before networking', as
   await assert.rejects(
     GenericKV.semanticSearchGetKeys({ query: '   ' }),
     /No query text/,
+  );
+  await assert.rejects(
+    GenericKV.semanticSearchGetKeys({ query: '', vector: [] }),
+    /finite numbers/,
+  );
+  await assert.rejects(
+    GenericKV.semanticSearchGetKeys({ query: '', vector: [Number.NaN] }),
+    /finite numbers/,
   );
   await assert.rejects(
     GenericKV.semanticSearchGetKeysWhere({ query: 'launch', filters: {} }),
