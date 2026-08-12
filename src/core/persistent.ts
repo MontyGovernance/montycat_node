@@ -151,13 +151,12 @@ class Persistent extends GenericKV {
      * @param options - Optional cache (number) and compression (boolean) settings.
      * @return A promise that resolves with the result of the keyspace creation.
      */
-    static async createKeyspace({ cache, compression }: { cache?: number; compression?: boolean } = {}): Promise<any> {
+    static async createKeyspace({ cache, compression, semantic = true }: { cache?: number; compression?: boolean; semantic?: boolean } = {}): Promise<any> {
 
         const cacheValue = cache !== undefined ? cache.toString() : "0";
         const compressionValue = compression === true ? "y" : "n";
 
-        const query = {
-            raw: [
+        const raw = [
                 "create-keyspace",
                 "store", this.store,
                 "keyspace", this.keyspace,
@@ -165,7 +164,10 @@ class Persistent extends GenericKV {
                 "distributed", this.distributed ? "y" : "n",
                 "cache", cacheValue,
                 "compression", compressionValue
-            ],
+            ];
+        if (!semantic) raw.push("semantic", "off");
+        const query = {
+            raw,
             credentials: [this.username, this.password],
         };
         return await runQuery(this, JSON.stringify(query));

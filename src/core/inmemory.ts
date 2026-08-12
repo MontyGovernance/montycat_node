@@ -15,15 +15,17 @@ class InMemory extends GenericKV {
      * Creates a keyspace in the in-memory store.
      * @returns A promise that resolves with the result of the keyspace creation.
      */
-    static async createKeyspace(): Promise<any> {
+    static async createKeyspace({ semantic = true }: { semantic?: boolean } = {}): Promise<any> {
+        const raw = [
+            "create-keyspace",
+            "store", this.store,
+            "keyspace", this.keyspace,
+            "persistent", this.persistent ? "y" : "n",
+            "distributed", this.distributed ? "y" : "n"
+        ];
+        if (!semantic) raw.push("semantic", "off");
         const query = {
-            raw: [
-                "create-keyspace",
-                "store", this.store,
-                "keyspace", this.keyspace,
-                "persistent", this.persistent ? "y" : "n",
-                "distributed", this.distributed ? "y" : "n"
-            ],
+            raw,
             credentials: [this.username, this.password],
         };
         return await runQuery(this, JSON.stringify(query));
