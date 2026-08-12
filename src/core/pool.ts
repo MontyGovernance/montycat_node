@@ -31,6 +31,59 @@ import tls from 'tls';
 
 const NEWLINE = 0x0a;
 
+/**
+ * Incrementally split newline-delimited byte frames in O(total bytes).
+ *
+ * Incoming chunks are retained as slices and joined once per completed frame;
+ * growing responses are never recopied on every socket event.
+ */
+export class FrameAccumulator {
+  private parts: Buffer[] = [];
+  private length = 0;
+
+  push(chunk: Buffer): Buffer[] {
+    const frames: Buffer[] = [];
+    let start = 0;
+
+    while (start < chunk.length) {
+      const newline = chunk.indexOf(NEWLINE, start);
+      if (newline === -1) {
+        const tail = chunk.subarray(start);
+        this.parts.push(tail);
+        this.length += tail.length;
+        break;
+      }
+
+      const tail = chunk.subarray(start, newline);
+      const frameLength = this.length + tail.length;
+      if (this.parts.length === 0) {
+        frames.push(tail);
+      } else {
+        if (tail.length > 0) this.parts.push(tail);
+        frames.push(Buffer.concat(this.parts, frameLength));
+      }
+      this.parts = [];
+      this.length = 0;
+      start = newline + 1;
+    }
+
+    return frames;
+  }
+
+  hasBufferedData(): boolean {
+    return this.length > 0;
+  }
+
+  finish(): Buffer {
+    const result = this.parts.length === 0
+      ? Buffer.alloc(0)
+      : Buffer.concat(this.parts, this.length);
+    this.parts = [];
+    this.length = 0;
+    return result;
+  }
+}
+
 /** How many idle connections to keep, and how long to keep them. */
 export interface PoolConfig {
   /** Maximum idle connections retained per target. Never unbounded. Default 8. */
@@ -69,9 +122,8 @@ export class ReadFailed extends Error {}
  * when the call returns would corrupt it (contract §7).
  */
 export class PooledConnection {
-  private buffer: Buffer = Buffer.alloc(0);
-  /** Where to resume scanning, so a large response is not rescanned per chunk. */
-  private scanned = 0;
+  private frames = new FrameAccumulator();
+  private unexpectedFrame = false;
   private pending: {
     resolve: (line: string) => void;
     reject: (err: Error) => void;
@@ -97,26 +149,17 @@ export class PooledConnection {
   }
 
   private onData(chunk: Buffer): void {
-    this.buffer = this.buffer.length === 0 ? chunk : Buffer.concat([this.buffer, chunk]);
-
-    // Scan only what has not been scanned before. Re-scanning the whole
-    // accumulation on every `data` event is O(n²) on a large response.
-    const index = this.buffer.indexOf(NEWLINE, this.scanned);
-    if (index === -1) {
-      this.scanned = this.buffer.length;
-      return;
-    }
-
-    const line = this.buffer.subarray(0, index).toString();
-    // Anything past the newline belongs to the next response and stays here.
-    this.buffer = this.buffer.subarray(index + 1);
-    this.scanned = 0;
-
-    const pending = this.pending;
-    this.pending = null;
-    if (pending) {
-      clearTimeout(pending.timer);
-      pending.resolve(line);
+    for (const frame of this.frames.push(chunk)) {
+      const pending = this.pending;
+      if (pending) {
+        this.pending = null;
+        clearTimeout(pending.timer);
+        pending.resolve(frame.toString());
+      } else {
+        // A strict request/response connection must not receive another frame
+        // before another request. Keep it out of the pool if it does.
+        this.unexpectedFrame = true;
+      }
     }
   }
 
@@ -181,7 +224,7 @@ export class PooledConnection {
     if (this.dead || this.socket.destroyed || !this.socket.writable) return false;
     // Leftover bytes mean a previous response was never fully consumed, which
     // would desynchronise the next caller's read.
-    if (this.buffer.length > 0) return false;
+    if (this.unexpectedFrame || this.frames.hasBufferedData()) return false;
     return this.pending === null;
   }
 

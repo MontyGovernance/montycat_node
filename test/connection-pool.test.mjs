@@ -231,14 +231,20 @@ test('two frames arriving in one write do not merge, and desync the connection o
   }
 });
 
-test('a response larger than one chunk is reassembled', async () => {
-  const filler = 'x'.repeat(600 * 1024);
+test('a heavily fragmented large response is reassembled', async () => {
+  const filler = 'x'.repeat(17 * 1024 * 1024);
   const stub = stubServer({ responder: () => `{"status":true,"payload":"${filler}"}\n` });
   await stub.listen();
   try {
-    const engine = engineFor(stub.state.port, {});
-    const result = await engine.listOwners();
-    assert.equal(result.payload.length, 600 * 1024, 'large response was truncated');
+    for (const [mode, pool] of [['direct', undefined], ['pooled', {}]]) {
+      const engine = engineFor(stub.state.port, pool);
+      const result = await engine.listOwners();
+      assert.equal(
+        result.payload.length,
+        filler.length,
+        `${mode} large response was truncated`,
+      );
+    }
   } finally {
     await stub.close();
   }

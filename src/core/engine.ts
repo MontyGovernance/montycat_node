@@ -2,7 +2,7 @@ import net from 'net';
 import JSONbigBase from 'json-bigint';
 import GenericKV from '../classes/generic.js';
 import tls from "tls";
-import { ConnectionPool, PoolConfig, PooledConnection, WriteFailed, closeAllPools, getPool } from './pool.js';
+import { ConnectionPool, FrameAccumulator, PoolConfig, PooledConnection, WriteFailed, closeAllPools, getPool } from './pool.js';
 
 const JSONbig = JSONbigBase({ storeAsString: true });
 
@@ -659,16 +659,13 @@ async function sendData(
 
   return new Promise((resolve, _reject) => {
     let client: net.Socket | tls.TLSSocket;
-    let response = "";
+    const frames = new FrameAccumulator();
     const subscriptionMode = isSubscriptionMessage(message);
     let stopped = false;
 
     const onData = (data: Buffer) => {
-      response += data.toString();
-      const parts = response.split("\n");
-      response = parts.pop() || "";
-
-      for (const part of parts) {
+      for (const frame of frames.push(data)) {
+        const part = frame.toString();
         if (!part.trim()) continue;
         try {
           const parsed = recursiveParseJSON(part);
@@ -687,7 +684,7 @@ async function sendData(
     const onEnd = () => {
       if (!subscriptionMode) {
         try {
-          const parsed = recursiveParseJSON(response);
+          const parsed = recursiveParseJSON(frames.finish().toString());
           resolve(parsed);
         } catch {
           resolve("Incomplete or invalid response");

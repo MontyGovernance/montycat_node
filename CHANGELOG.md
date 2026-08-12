@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.1
+
+Large-response performance fix. Upgrading requires no code changes.
+
+### Fixed
+
+- Large newline-framed responses now retain socket chunks and join them only
+  once per completed frame. This avoids repeatedly copying the entire response
+  as it grows in direct, pooled, and subscription modes.
+
 ## 1.3.0
 
 Opt-in connection pooling. Additive — upgrading needs no code changes, and
