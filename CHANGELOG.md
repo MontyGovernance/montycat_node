@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add the exported `ResultOrder` type and optional ordering to key-range, bulk, and lookup reads.
+
 ## 1.3.1
 
 Large-response performance fix. Upgrading requires no code changes.

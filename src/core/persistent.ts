@@ -1,4 +1,5 @@
 import { runQuery, convertToBinaryQuery, convertCustomKey } from '../functions/storeGenericFunctions.js';
+import type { ResultOrder } from '../functions/storeGenericFunctions.js';
 import GenericKV from '../classes/generic.js';
 
 /**
@@ -108,14 +109,14 @@ class Persistent extends GenericKV {
      * @param volumes - An array of volume names to retrieve keys from.
      * @returns A promise that resolves with the retrieved keys.
      */
-    static async getKeys({ limitOutput = { start: 0, stop: 0 }, latestVolume = false, volumes = [] }: { limitOutput?: { start: number; stop: number }; latestVolume?: boolean; volumes?: string[] } = {}): Promise<any> {
+    static async getKeys({ limitOutput = { start: 0, stop: 0 }, order = null, latestVolume = false, volumes = [] }: { limitOutput?: { start: number; stop: number }; order?: ResultOrder | null; latestVolume?: boolean; volumes?: string[] } = {}): Promise<any> {
 
         if ((!volumes || volumes.length === 0) && !latestVolume && (!limitOutput || (limitOutput.start === 0 && limitOutput.stop === 0))) {
             throw new Error("Please provide volumes/latest volume or limit.");
         }
 
         this.command = "get_keys";
-        const query = convertToBinaryQuery(this, { limitOutput, latestVolume, volumes });
+        const query = convertToBinaryQuery(this, { limitOutput, order, latestVolume, volumes });
         return runQuery(this, query);
     }
 
