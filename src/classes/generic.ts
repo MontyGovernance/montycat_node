@@ -6,6 +6,7 @@ import {
     convertToBinaryQuery,
     runQuery,
 } from '../functions/storeGenericFunctions.js'
+import type { ResultOrder } from '../functions/storeGenericFunctions.js';
 import { inspect } from 'util';
 
 /**
@@ -164,7 +165,7 @@ class GenericKV {
      * @param latestVolume - Whether to retrieve values from the latest volume only.
      * @returns A promise that resolves with the retrieved keys.
      */
-    static async getBulk({ bulkKeys = [], bulkCustomKeys = [], limitOutput = { start: 0, stop: 0 }, withPointers = false, keyIncluded = false, pointersMetadata = false, volumes = [], latestVolume = false }: { bulkKeys?: string[]; bulkCustomKeys?: string[]; limitOutput?: { start: number; stop: number }; withPointers?: boolean; keyIncluded?: boolean; pointersMetadata?: boolean; volumes?: string[]; latestVolume?: boolean } = {}): Promise<any> {
+    static async getBulk({ bulkKeys = [], bulkCustomKeys = [], limitOutput = { start: 0, stop: 0 }, order = null, withPointers = false, keyIncluded = false, pointersMetadata = false, volumes = [], latestVolume = false }: { bulkKeys?: string[]; bulkCustomKeys?: string[]; limitOutput?: { start: number; stop: number }; order?: ResultOrder | null; withPointers?: boolean; keyIncluded?: boolean; pointersMetadata?: boolean; volumes?: string[]; latestVolume?: boolean } = {}): Promise<any> {
 
         try {
             if (bulkCustomKeys.length) bulkKeys = bulkKeys.concat(convertCustomKeys(bulkCustomKeys));
@@ -179,7 +180,7 @@ class GenericKV {
             }
 
             this.command = "get_bulk";
-            const query = convertToBinaryQuery(this, { bulkKeys, limitOutput, withPointers, keyIncluded, pointersMetadata, volumes, latestVolume });
+            const query = convertToBinaryQuery(this, { bulkKeys, limitOutput, order, withPointers, keyIncluded, pointersMetadata, volumes, latestVolume });
             return runQuery(this, query);
         } catch (err) {
             throw err;
@@ -221,10 +222,10 @@ class GenericKV {
      * @param schema - The schema to use for the lookup.
      * @returns A promise that resolves with the result of the lookup.
      */
-    static async lookupKeysWhere({ searchCriteria = {}, limitOutput = { start: 0, stop: 0 }, schema = null }: { searchCriteria?: { [key: string]: any }; limitOutput?: { start: number; stop: number }; schema?: any } = {}): Promise<any> {
+    static async lookupKeysWhere({ searchCriteria = {}, limitOutput = { start: 0, stop: 0 }, order = null, schema = null }: { searchCriteria?: { [key: string]: any }; limitOutput?: { start: number; stop: number }; order?: ResultOrder | null; schema?: any } = {}): Promise<any> {
         try {
             this.command = "lookup_keys";
-            const query = convertToBinaryQuery(this, { searchCriteria, limitOutput, schema });
+            const query = convertToBinaryQuery(this, { searchCriteria, limitOutput, order, schema });
             return runQuery(this, query);
         } catch (err) {
             throw err;
@@ -241,11 +242,11 @@ class GenericKV {
      * @param pointersMetadata - Whether to include metadata for the pointers in the retrieved values.
      * @return A promise that resolves with the result of the lookup.
      */
-    static async lookupValuesWhere({ searchCriteria = {}, limitOutput = { start: 0, stop: 0 }, withPointers = false, schema = null, keyIncluded = false, pointersMetadata = false }: { searchCriteria?: { [key: string]: any }; limitOutput?: { start: number; stop: number }; withPointers?: boolean; schema?: any; keyIncluded?: boolean; pointersMetadata?: boolean } = {}): Promise<any> {
+    static async lookupValuesWhere({ searchCriteria = {}, limitOutput = { start: 0, stop: 0 }, order = null, withPointers = false, schema = null, keyIncluded = false, pointersMetadata = false }: { searchCriteria?: { [key: string]: any }; limitOutput?: { start: number; stop: number }; order?: ResultOrder | null; withPointers?: boolean; schema?: any; keyIncluded?: boolean; pointersMetadata?: boolean } = {}): Promise<any> {
 
         try {
             this.command = "lookup_values";
-            const query = convertToBinaryQuery(this, { searchCriteria, limitOutput, withPointers, schema, keyIncluded, pointersMetadata });
+            const query = convertToBinaryQuery(this, { searchCriteria, limitOutput, order, withPointers, schema, keyIncluded, pointersMetadata });
             return runQuery(this, query);
         } catch (err) {
             throw err;

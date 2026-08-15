@@ -2,6 +2,8 @@ import xxhash from 'xxhashjs';
 import { sendData } from '../core/engine.js';
 import { Timestamp, Pointer } from '../core/schema.js';
 
+export type ResultOrder = "ascending" | "descending";
+
 /**
  * Utility functions for handling custom keys and values in a generic store.
  * These functions include converting custom keys, processing bulk keys and values,
@@ -80,6 +82,7 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
         bulkKeysValues = {},
         searchCriteria = {},
         limitOutput = { start: 0, stop: 0 },
+        order = null,
         withPointers = false,
         schema = null,
         keyIncluded = false,
@@ -110,6 +113,7 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
         persistent: cls.persistent,
         distributed: cls.distributed,
         limit_output: limitOutput,
+        order,
         key,
         value: JSON.stringify(processedValue),
         command: cls.command,

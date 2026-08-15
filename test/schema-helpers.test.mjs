@@ -80,12 +80,14 @@ test('serializes store queries and optional semantic fields', () => {
     semanticVectors: { 7: [0.3, 0.4] },
     semanticVectorList: [[0.5, 0.6]],
     waitForIndex: true,
+    order: 'ascending',
   }));
 
   assert.equal(query.schema, 'Event');
   assert.equal(query.search_criteria, 'launch');
   assert.equal(query.min_score, 0.7);
   assert.equal(query.wait_for_index, true);
+  assert.equal(query.order, 'ascending');
   assert.deepEqual(query.semantic_vector, [0.1, 0.2]);
   assert.deepEqual(query.semantic_vectors, { 7: [0.3, 0.4] });
   assert.deepEqual(query.semantic_vector_list, [[0.5, 0.6]]);
