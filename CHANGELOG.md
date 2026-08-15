@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.3.2 - 2026-08-15
+
 - Add the exported `ResultOrder` type and optional ordering to key-range, bulk, and lookup reads.
 
 ## 1.3.1
