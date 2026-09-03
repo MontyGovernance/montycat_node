@@ -9,6 +9,12 @@ import {
 import type { ResultOrder } from '../functions/storeGenericFunctions.js';
 import { inspect } from 'util';
 
+export enum SearchMode {
+    Semantic = 'semantic',
+    Keyword = 'keyword',
+    Hybrid = 'hybrid',
+}
+
 /**
  * GenericKV class that provides a base for key-value store operations.
  * It includes methods for inserting, updating, retrieving, and deleting keys and values.
@@ -259,15 +265,18 @@ class GenericKV {
      * public methods differ only in which value-inclusion flags they pass,
      * so the wire call lives here once.
      */
-    private static async semanticSearchCore(query: string, vector: number[] | null, limitOutput: { start: number; stop: number }, minScore: number | null, filters: object | null, withPointers: boolean, keyIncluded: boolean, pointersMetadata: boolean): Promise<any> {
-        if (vector === null && (!query || !query.trim())) {
+    private static async semanticSearchCore(query: string, vector: number[] | null, limitOutput: { start: number; stop: number }, minScore: number | null, filters: object | null, withPointers: boolean, keyIncluded: boolean, pointersMetadata: boolean, mode: SearchMode): Promise<any> {
+        if (filters !== null && Object.keys(filters).length === 0) {
+            throw new Error("Search filters cannot be empty.");
+        }
+        if ((mode !== SearchMode.Semantic || vector === null) && (!query || !query.trim())) {
             throw new Error("No query text provided for semantic search.");
         }
         if (vector !== null && (vector.length === 0 || vector.some(value => !Number.isFinite(value)))) {
             throw new Error("Semantic vector must contain only finite numbers.");
         }
 
-        this.command = "semantic_search";
+        this.command = `${mode}_search`;
         const binaryQuery = convertToBinaryQuery(this, {
             semanticQuery: query,
             semanticVector: vector,
@@ -302,8 +311,17 @@ class GenericKV {
      *                   this value. Default null (no score filter).
      * @return A promise resolving with ranked hits, each `{__key__, __score__}`.
      */
+    static async searchKeys({ query, mode = SearchMode.Semantic, filters = null, vector = null, limitOutput = { start: 0, stop: 0 }, minScore = null }: { query: string; mode?: SearchMode; filters?: object | null; vector?: number[] | null; limitOutput?: { start: number; stop: number }; minScore?: number | null }): Promise<any> {
+        return this.semanticSearchCore(query, vector, limitOutput, minScore, filters, false, false, false, mode);
+    }
+
+    static async searchValues({ query, mode = SearchMode.Semantic, filters = null, vector = null, limitOutput = { start: 0, stop: 0 }, minScore = null, withPointers = false, pointersMetadata = false }: { query: string; mode?: SearchMode; filters?: object | null; vector?: number[] | null; limitOutput?: { start: number; stop: number }; minScore?: number | null; withPointers?: boolean; pointersMetadata?: boolean }): Promise<any> {
+        return this.semanticSearchCore(query, vector, limitOutput, minScore, filters, withPointers, true, pointersMetadata, mode);
+    }
+
+    /** @deprecated Use `searchKeys`; this wrapper remains semantic-only. */
     static async semanticSearchGetKeys({ query, vector = null, limitOutput = { start: 0, stop: 0 }, minScore = null }: { query: string; vector?: number[] | null; limitOutput?: { start: number; stop: number }; minScore?: number | null }): Promise<any> {
-        return this.semanticSearchCore(query, vector, limitOutput, minScore, null, false, false, false);
+        return this.searchKeys({ query, vector, limitOutput, minScore });
     }
 
     /**
@@ -328,11 +346,12 @@ class GenericKV {
      *                   this value. Default null (no score filter).
      * @return A promise resolving with ranked hits, each `{__key__, __score__}`.
      */
+    /** @deprecated Use `searchKeys` with `filters`; this wrapper remains semantic-only. */
     static async semanticSearchGetKeysWhere({ query, filters, vector = null, limitOutput = { start: 0, stop: 0 }, minScore = null }: { query: string; filters: object; vector?: number[] | null; limitOutput?: { start: number; stop: number }; minScore?: number | null }): Promise<any> {
         if (!filters || Object.keys(filters).length === 0) {
             throw new Error("No filters provided for hybrid semantic search.");
         }
-        return this.semanticSearchCore(query, vector, limitOutput, minScore, filters, false, false, false);
+        return this.searchKeys({ query, filters, vector, limitOutput, minScore });
     }
 
     /**
@@ -361,8 +380,9 @@ class GenericKV {
      *         `{__key__, __score__, __value__}` — the same dunder envelope
      *         `lookupValuesWhere` returns with `keyIncluded: true`, plus the score.
      */
+    /** @deprecated Use `searchValues`; this wrapper remains semantic-only. */
     static async semanticSearchGetValues({ query, vector = null, limitOutput = { start: 0, stop: 0 }, minScore = null, withPointers = false, pointersMetadata = false }: { query: string; vector?: number[] | null; limitOutput?: { start: number; stop: number }; minScore?: number | null; withPointers?: boolean; pointersMetadata?: boolean }): Promise<any> {
-        return this.semanticSearchCore(query, vector, limitOutput, minScore, null, withPointers, true, pointersMetadata);
+        return this.searchValues({ query, vector, limitOutput, minScore, withPointers, pointersMetadata });
     }
 
     /**
@@ -393,11 +413,12 @@ class GenericKV {
      *         `{__key__, __score__, __value__}` — the same dunder envelope
      *         `lookupValuesWhere` returns with `keyIncluded: true`, plus the score.
      */
+    /** @deprecated Use `searchValues` with `filters`; this wrapper remains semantic-only. */
     static async semanticSearchGetValuesWhere({ query, filters, vector = null, limitOutput = { start: 0, stop: 0 }, minScore = null, withPointers = false, pointersMetadata = false }: { query: string; filters: object; vector?: number[] | null; limitOutput?: { start: number; stop: number }; minScore?: number | null; withPointers?: boolean; pointersMetadata?: boolean }): Promise<any> {
         if (!filters || Object.keys(filters).length === 0) {
             throw new Error("No filters provided for hybrid semantic search.");
         }
-        return this.semanticSearchCore(query, vector, limitOutput, minScore, filters, withPointers, true, pointersMetadata);
+        return this.searchValues({ query, filters, vector, limitOutput, minScore, withPointers, pointersMetadata });
     }
 
     /**

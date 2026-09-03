@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.3 - 2026-09-02
+
+- Added the exported `SearchMode` enum, `searchKeys`, and `searchValues`, with optional
+  metadata filters. Existing `semanticSearch*` methods are deprecated
+  semantic-only wrappers with unchanged signatures and behavior. Keyword and
+  hybrid modes use compatibility-safe commands; current engines normalize
+  hybrid RRF scores to `[0, 1]`.
+
+### Documentation
+
+- Clarify score semantics: hybrid RRF is bounded to `[0, 1]`, while raw BM25
+  keyword scores are unbounded and should only be compared within the same
+  query and search mode.
+
 ## 1.3.2 - 2026-08-15
 
 - Add the exported `ResultOrder` type and optional ordering to key-range, bulk, and lookup reads.

@@ -4,6 +4,7 @@ import { Pointer, Timestamp, Schema, Field } from "./core/schema.js";
 import { closeAllPools } from "./core/pool.js";
 import type { PoolConfig } from "./core/pool.js";
 import type { ResultOrder } from "./functions/storeGenericFunctions.js";
+import { SearchMode } from "./classes/generic.js";
 
-export { Engine, ValidPermissions, PolicyCapability, PolicyKeyspaceType, SemanticModel, PolicyFormat, Keyspace, Pointer, Timestamp, Schema, Field, closeAllPools };
+export { Engine, ValidPermissions, PolicyCapability, PolicyKeyspaceType, SemanticModel, PolicyFormat, SearchMode, Keyspace, Pointer, Timestamp, Schema, Field, closeAllPools };
 export type { PoolConfig, ResultOrder };
