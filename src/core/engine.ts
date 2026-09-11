@@ -3,6 +3,7 @@ import JSONbigBase from 'json-bigint';
 import GenericKV from '../classes/generic.js';
 import tls from "tls";
 import { ConnectionPool, FrameAccumulator, PoolConfig, PooledConnection, WriteFailed, closeAllPools, getPool } from './pool.js';
+import { TlsSettings, TlsVerificationError, resolveTls } from './tls.js';
 
 const JSONbig = JSONbigBase({ storeAsString: true });
 
@@ -25,6 +26,29 @@ interface EngineConfig {
    * Subscriptions are never pooled. Call `closeAllPools()` before exit.
    */
   pool?: PoolConfig | null;
+  /**
+   * Verify the engine's certificate. Absent — the default — encrypts without
+   * checking who answers, which is what `useTls` has always meant here; turning
+   * verification on by default would break every deployment running the
+   * engine's own self-signed certificate.
+   *
+   * Leave it unset when passing a pin below; it is then implied.
+   */
+  certificateVerification?: boolean;
+  /**
+   * Path to the engine's certificate in PEM form, copied from the engine host.
+   * The certificate the engine presents must match it exactly.
+   */
+  certificatePath?: string;
+  /**
+   * Its SHA-256 digest, for deployments that would rather pass a string than
+   * ship a file:
+   *
+   * ```sh
+   * openssl x509 -in server.crt -noout -fingerprint -sha256
+   * ```
+   */
+  certificateFingerprint?: string;
 }
 
 /** * Interface for raw query structure.
@@ -101,8 +125,27 @@ class Engine {
   public useTls: boolean | undefined;
   /** Pooling config, or null/undefined for connect-per-request. */
   public pool: PoolConfig | null | undefined;
+  /**
+   * What to require of the engine's certificate, or null to encrypt without
+   * checking who answers — which is what `useTls` alone has always meant here.
+   *
+   * Public so `connectEngine` carries it onto keyspace classes: a keyspace must
+   * require exactly what its engine was told to require.
+   */
+  public tls: TlsSettings | null;
 
-  constructor({ host = null, port = null, username = null, password = null, store = null, useTls = false, pool = null }: EngineConfig = {}) {
+  constructor({
+    host = null,
+    port = null,
+    username = null,
+    password = null,
+    store = null,
+    useTls = false,
+    pool = null,
+    certificateVerification,
+    certificatePath,
+    certificateFingerprint,
+  }: EngineConfig = {}) {
     this.host = host;
     this.port = port;
     this.username = username;
@@ -110,6 +153,10 @@ class Engine {
     this.store = store;
     this.useTls = useTls;
     this.pool = pool;
+    // Parsed here rather than at first request, so a misconfiguration fails
+    // where it was written.
+    this.tls = resolveTls({ certificateVerification, certificatePath, certificateFingerprint });
+    this.tls?.assertUsableWith(Boolean(useTls));
   }
 
   /**
@@ -118,7 +165,16 @@ class Engine {
    * @param {string} uri - The URI string to parse.
    * @returns {Engine} An instance of the Engine class configured with the parsed values.
    */
-  static fromUri(uri: string, pool: PoolConfig | null = null): Engine {
+  static fromUri(
+    uri: string,
+    pool: PoolConfig | null = null,
+    tlsOptions: {
+      useTls?: boolean;
+      certificateVerification?: boolean;
+      certificatePath?: string;
+      certificateFingerprint?: string;
+    } = {},
+  ): Engine {
     if (!uri.startsWith("montycat://")) {
       throw new Error("URI must use 'montycat://' protocol");
     }
@@ -153,8 +209,11 @@ class Engine {
       username,
       password,
       store: store || null,
-      useTls: false,
+      useTls: tlsOptions.useTls ?? false,
       pool,
+      certificateVerification: tlsOptions.certificateVerification,
+      certificatePath: tlsOptions.certificatePath,
+      certificateFingerprint: tlsOptions.certificateFingerprint,
     });
   }
 
@@ -169,7 +228,7 @@ class Engine {
       raw: ['create-store', 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   /**
@@ -183,7 +242,7 @@ class Engine {
       raw: ['remove-store', 'store', this.store!],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   /**
@@ -197,7 +256,7 @@ class Engine {
       raw: ['create-owner', 'username', owner, 'password', password],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   async removeOwner({ owner }: { owner: string }): Promise<unknown> {
@@ -205,7 +264,7 @@ class Engine {
       raw: ['remove-owner', 'username', owner],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   /**
@@ -217,7 +276,7 @@ class Engine {
       raw: ['list-owners'],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   /**
@@ -259,7 +318,7 @@ class Engine {
       }
     }
 
-    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls, this.pool, this.tls);
   }
 
   /**
@@ -300,7 +359,7 @@ class Engine {
       }
     }
 
-    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls, this.pool, this.tls);
   }
 
   /**
@@ -345,7 +404,7 @@ class Engine {
     if (store) rawQuery.raw.push('store', store);
     if (keyspace) rawQuery.raw.push('keyspace', keyspace);
 
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   /**
@@ -381,7 +440,7 @@ class Engine {
     if (store) rawQuery.raw.push('store', store);
     if (keyspace) rawQuery.raw.push('keyspace', keyspace);
 
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   /** Read the actual global and per-keyspace semantic configuration. */
@@ -435,7 +494,7 @@ class Engine {
 
   private executeRaw(raw: string[]): Promise<unknown> {
     const query: RawQuery = { raw, credentials: [this.username!, this.password!] };
-    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(query), undefined, this.useTls, this.pool, this.tls);
   }
 
   async policyView({ owner, store }: { owner?: string; store?: string } = {}): Promise<unknown> {
@@ -510,7 +569,7 @@ class Engine {
       raw: ['get-structure-available', ...storePart],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   /**
@@ -525,7 +584,7 @@ class Engine {
       raw: ['enable-wait-for-index'],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   /**
@@ -540,7 +599,7 @@ class Engine {
       raw: ['disable-wait-for-index'],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   /** Internal helper for no-argument superowner raw commands. */
@@ -549,7 +608,7 @@ class Engine {
       raw: [command],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   /**
@@ -605,7 +664,7 @@ class Engine {
       raw: ['snapshot-rate', String(rate)],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
   /**
@@ -619,7 +678,7 @@ class Engine {
       raw: ['expiration-check', String(rate)],
       credentials: [this.username!, this.password!],
     };
-    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool);
+    return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 }
 
@@ -649,11 +708,12 @@ async function sendData(
   callback?: (data: unknown) => void,
   useTls: boolean = false,
   poolConfig?: PoolConfig | null,
+  tlsSettings: TlsSettings | null = null,
 ): Promise<unknown | SubscriptionHandle> {
   // Subscriptions are never pooled (contract §5): they are long-lived, stream
   // many responses to one request, and live on the `port + 1` subscription port.
   if (!isSubscriptionMessage(message)) {
-    const pooled = await pooledRequest(host, port, message, useTls, poolConfig);
+    const pooled = await pooledRequest(host, port, message, useTls, tlsSettings, poolConfig);
     if (pooled !== NOT_POOLED) return pooled;
   }
 
@@ -724,23 +784,51 @@ async function sendData(
     };
 
     if (useTls) {
-      const tlsSocket = tls.connect(
-        {
-          host,
-          port,
-          rejectUnauthorized: false, // for self-signed certs, enable true in prod
-        },
-        () => finalizeConnect(tlsSocket)
-      );
+      const tlsSocket = tls.connect(connectOptions(host, port, tlsSettings), () => {
+        // A pin is checked here rather than through `rejectUnauthorized`,
+        // because that check answers "does this chain to a trusted root", not
+        // "is this the certificate I was given" — a certificate signed by a
+        // real CA would pass it, pin or no pin.
+        try {
+          tlsSettings?.verifyPeer(tlsSocket);
+        } catch (err) {
+          clearTimeout(handshakeTimer);
+          tlsSocket.destroy();
+          // Closed before a single request byte reaches a connection that
+          // failed the check — and settled unconditionally, subscriptions
+          // included. A pin rejection lands *here* rather than on the socket's
+          // error event, because the handshake itself succeeded: verification
+          // is deliberately deferred until after it. `finalizeConnect` is the
+          // only other thing that settles a subscription and it is skipped by
+          // the `return` below, so a guard here would hang the subscriber.
+          resolve(`Connection error: ${(err as Error).message}`);
+          return;
+        }
+        finalizeConnect(tlsSocket);
+      });
 
-      // Handshake timeout
+      // A handshake that never completes must still settle this promise, in
+      // subscription mode as much as in request mode. `finalizeConnect` is what
+      // resolves a subscription with its `{ stop }` handle, and a failed
+      // handshake never reaches it — so a subscriber that is not resolved here
+      // waits forever. Handing back an error string instead of a handle is a
+      // shape the caller can check; never returning is not.
       const handshakeTimer = setTimeout(() => {
         tlsSocket.destroy();
-        if (!subscriptionMode) resolve("TLS handshake timeout");
+        resolve("Connection error: TLS handshake timeout");
       }, 10000);
 
       tlsSocket.once("secureConnect", () => clearTimeout(handshakeTimer));
-      tlsSocket.once("error", () => clearTimeout(handshakeTimer));
+      tlsSocket.once("error", (err) => {
+        // Settle, don't just stop the clock. A pre-`secureConnect` failure
+        // never reaches the code that attaches a socket error handler, so
+        // nothing else can resolve this promise — clearing the timer alone left
+        // the caller awaiting forever. Unreachable while `rejectUnauthorized`
+        // was hardcoded false; a verified connection to an untrusted engine
+        // reaches it immediately.
+        clearTimeout(handshakeTimer);
+        resolve(`Connection error: ${err.message}`);
+      });
     } else {
       const tcpSocket = new net.Socket();
       tcpSocket.connect(port, host, () => finalizeConnect(tcpSocket));
@@ -751,6 +839,25 @@ async function sendData(
 /** Sentinel meaning "pooling is off — fall through to the per-request path". */
 const NOT_POOLED = Symbol('not-pooled');
 
+/**
+ * TLS connect options for one target.
+ *
+ * `rejectUnauthorized` is left off for both the unverified default and the
+ * pinned paths: pinning compares the certificate itself afterwards, and the
+ * engine's self-signed certificate names only `localhost`, `127.0.0.1` and
+ * `::1`, so Node's hostname check would reject a valid certificate for the
+ * wrong reason. It is switched on only when there is no pin to compare and the
+ * caller asked for verification — the proxy-with-a-real-certificate case, where
+ * Node's own chain and hostname checks are exactly what is wanted.
+ */
+function connectOptions(
+  host: string,
+  port: number,
+  tlsSettings: TlsSettings | null,
+): tls.ConnectionOptions {
+  return { host, port, rejectUnauthorized: tlsSettings?.defersToNode ?? false };
+}
+
 const REQUEST_TIMEOUT_MS = 120000;
 
 /** Open one connection and wrap it for pooling. */
@@ -758,11 +865,22 @@ function openPooled(
   host: string,
   port: number,
   useTls: boolean,
+  tlsSettings: TlsSettings | null,
 ): Promise<PooledConnection> {
   return new Promise((resolve, reject) => {
     if (useTls) {
-      const socket = tls.connect({ host, port, rejectUnauthorized: false }, () => {
+      const socket = tls.connect(connectOptions(host, port, tlsSettings), () => {
         clearTimeout(handshake);
+        // The same check as the per-request path. A pin enforced on one and
+        // forgotten on the other would be worse than no pin, because it would
+        // look like it was working.
+        try {
+          tlsSettings?.verifyPeer(socket);
+        } catch (err) {
+          socket.destroy();
+          reject(err);
+          return;
+        }
         resolve(new PooledConnection(socket));
       });
       const handshake = setTimeout(() => {
@@ -798,9 +916,10 @@ async function pooledRequest(
   port: number,
   message: string,
   useTls: boolean,
+  tlsSettings: TlsSettings | null,
   poolConfig: PoolConfig | undefined | null,
 ): Promise<unknown | typeof NOT_POOLED> {
-  const pool = getPool(host, port, useTls, poolConfig);
+  const pool = getPool(host, port, useTls, tlsSettings, poolConfig);
   if (!pool) return NOT_POOLED;
 
   const leased = pool.checkout();
@@ -823,7 +942,7 @@ async function pooledRequest(
 
   let conn: PooledConnection;
   try {
-    conn = await openPooled(host, port, useTls);
+    conn = await openPooled(host, port, useTls, tlsSettings);
   } catch (err) {
     return `Connection error: ${(err as Error).message}`;
   }
@@ -877,4 +996,4 @@ function recursiveParseJSON(data: unknown): unknown {
   }
 }
 
-export { Engine, EngineConfig, sendData, ValidPermissions, PolicyCapability, PolicyKeyspaceType, SemanticModel, PolicyFormat };
+export { Engine, EngineConfig, sendData, ValidPermissions, PolicyCapability, PolicyKeyspaceType, SemanticModel, PolicyFormat, TlsSettings, TlsVerificationError };

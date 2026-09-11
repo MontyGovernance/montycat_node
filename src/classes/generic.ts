@@ -49,6 +49,9 @@ class GenericKV {
         // by (host, port, useTls), so every keyspace class pointing at one
         // server shares a single pool instead of each getting its own.
         (this as any).pool = (engine as any).pool ?? null;
+        // Likewise for trust: a keyspace must require exactly what its engine
+        // was told to require, not merely whether TLS is on.
+        (this as any).tls = (engine as any).tls ?? null;
     }
 
     /**

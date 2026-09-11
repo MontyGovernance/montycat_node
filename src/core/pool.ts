@@ -28,6 +28,7 @@
 
 import net from 'net';
 import tls from 'tls';
+import type { TlsSettings } from './tls.js';
 
 const NEWLINE = 0x0a;
 
@@ -292,9 +293,14 @@ export class ConnectionPool {
 
 // One pool per target. `useTls` is part of the key: a plaintext and a TLS
 // connection to the same address are not interchangeable.
+//
+// Trust is part of it too, and for the same reason: a connection verified
+// against a pinned certificate must never be handed to a caller that asked for
+// different trust, or for none at all.
 const POOLS = new Map<string, ConnectionPool>();
 
-const keyOf = (host: string, port: number, useTls: boolean) => `${host}:${port}:${useTls}`;
+const keyOf = (host: string, port: number, useTls: boolean, tls: TlsSettings | null) =>
+  `${host}:${port}:${useTls}:${tls?.poolKey() ?? ''}`;
 
 /**
  * The pool for this target, creating it on first use.
@@ -306,10 +312,11 @@ export function getPool(
   host: string,
   port: number,
   useTls: boolean,
+  tlsSettings: TlsSettings | null,
   config: PoolConfig | undefined | null,
 ): ConnectionPool | null {
   if (!config) return null;
-  const key = keyOf(host, port, useTls);
+  const key = keyOf(host, port, useTls, tlsSettings);
   let pool = POOLS.get(key);
   if (!pool) {
     pool = new ConnectionPool(config);

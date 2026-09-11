@@ -243,7 +243,7 @@ function processBulkValues(bulkValues: any[]) {
 async function runQuery(cls: any, query: string, callback?: (data: any) => void, subscribe = false): Promise<unknown> {
     const port = subscribe ? cls.port + 1 : cls.port;
     // Subscriptions are never pooled; sendData routes on that internally.
-    return sendData(cls.host, port, query, callback, cls.useTls, cls.pool);
+    return sendData(cls.host, port, query, callback, cls.useTls, cls.pool, cls.tls ?? null);
 }
 
 /**
