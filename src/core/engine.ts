@@ -21,8 +21,8 @@ interface EngineConfig {
    * Enables connection pooling for request/response traffic. Absent (the
    * default) opens a connection per request, exactly as before.
    *
-   * Pools live in a module-level registry keyed by `(host, port, useTls)`, so
-   * every keyspace class pointing at one server shares a single pool.
+   * Pools live in a module-level registry keyed by endpoint and TLS trust
+   * configuration, so keyspaces using the same settings share a single pool.
    * Subscriptions are never pooled. Call `closeAllPools()` before exit.
    */
   pool?: PoolConfig | null;
@@ -443,7 +443,14 @@ class Engine {
     return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }
 
-  /** Read the actual global and per-keyspace semantic configuration. */
+  /**
+   * Read the actual global and per-keyspace semantic configuration.
+   *
+   * The response data includes `reloading` while retained indexes reopen after
+   * global semantic search is enabled. Retry semantic searches or vector
+   * uploads until it is false. `indexing` reports live and backfill queue
+   * depths.
+   */
   async getSemanticStatus({ store, keyspace }: { store?: string; keyspace?: string } = {}): Promise<unknown> {
     if (keyspace && !store) throw new Error('A store is required when keyspace is specified');
     const raw = ['get-semantic-status'];
@@ -574,9 +581,10 @@ class Engine {
 
   /**
    * Enable the DB-wide "wait for index" default: writes block until their
-   * secondary indexes are updated before returning, so a write is immediately
-   * visible to index-backed reads (e.g. lookupValuesWhere) at the cost of
-   * higher write latency. Requires superowner credentials.
+   * secondary indexes and already-submitted semantic live work are updated
+   * before returning, so a write is immediately visible to index-backed reads
+   * (including keyword and hybrid search) at the cost of higher write latency.
+   * Requires superowner credentials.
    * @returns {Promise<unknown>} The server's response confirming the change.
    */
   async enableWaitForIndex(): Promise<unknown> {

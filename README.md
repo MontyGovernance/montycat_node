@@ -350,6 +350,9 @@ const status = await engine.getSemanticStatus({
   store: 'catalog',
   keyspace: 'products',
 });
+// After globally re-enabling semantic search, retry searches while
+// status.payload.reloading is true: retained indexes open in the background.
+// status.payload.indexing reports live and backfill queue depths.
 
 // Enable an unenrolled keyspace with an explicit model.
 await engine.enableSemanticSearch({
@@ -381,7 +384,8 @@ keyword mode, and a normalized `[0, 1]` RRF score in hybrid mode. Keyword
 scores have no fixed upper bound, so compare scores only within the same query
 and search mode. A hybrid score near `1.0` means strong agreement between both
 rankings; a top result found by only one branch is around `0.5`. `minScore`
-filters only the semantic branch.
+filters the final selected mode score before pagination. In hybrid mode this
+means the fused RRF score; keyword-only fallback hits are filtered too.
 
 ```typescript
 const matchingKeys = await Sales.searchKeys({
@@ -513,10 +517,10 @@ Tune it if you need to:
 pool: { maxIdle: 4, idleTimeoutMs: 15000 }     // defaults: 8, 30000
 ```
 
-**Pools are shared per `(host, port, useTls)`.** They live in a module-level registry,
+**Pools are shared per endpoint and TLS trust configuration.** They live in a module-level registry,
 not on the `Engine`, so two keyspace classes pointing at the same server share one pool
-rather than each opening its own. `useTls` is part of the key — a plaintext and a TLS
-connection to one address are not interchangeable.
+rather than each opening its own. The complete TLS configuration is part of the key, so
+plaintext, TLS, and connections using different certificate pins are never interchangeable.
 
 **Keep `maxIdle` modest.** An idle pooled connection still holds one of the engine's
 connection permits. The defaults are deliberately small; raise them only after measuring
@@ -607,8 +611,9 @@ const engine = new Engine({
 });
 ```
 
-Either one implies verification — no second option needed. Both compare the
-certificate byte for byte and skip hostname checking, because the engine's
+Either one implies verification — no second option needed. Both pin the same leaf
+certificate identity: a certificate file compares parsed DER bytes, while a fingerprint
+compares its SHA-256 digest. Pinning skips hostname checking because the engine's
 self-signed certificate carries only `localhost`, `127.0.0.1` and `::1` as subject
 alternative names unless it was regenerated with `init-self-tls dns/ip`. The
 comparison already answers the question a hostname check is a proxy for.

@@ -132,8 +132,8 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
         latest_volume: latestVolume,
     };
 
-    // Only `semantic_search` honors min_score; omit it otherwise so the wire is
-    // unchanged for existing commands (the engine defaults the field to None).
+    // Search commands apply min_score to their final mode score before
+    // pagination; omit it when unset so existing wire payloads stay unchanged.
     if (minScore !== null) {
         queryDict.min_score = minScore;
     }
