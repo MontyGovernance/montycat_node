@@ -12,4 +12,10 @@ dist/
 node_modules/
 package-lock.json
 CONNECTION_POOLING_PLAN.md
+# Application fixtures may contain local/private data. These TLS files are
+# intentionally public test material and must be present in clean CI clones.
 fixtures
+!test/fixtures/
+!test/fixtures/cert.pem
+!test/fixtures/key.pem
+!test/fixtures/other_cert.pem
