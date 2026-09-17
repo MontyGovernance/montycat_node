@@ -38,6 +38,12 @@
 
 ### Fixed
 
+- `updateBulk` now extracts the schema from serialized schema values and sends
+  it as request metadata, matching `insertBulk`. Nested `timestamps` metadata
+  is preserved, keeping updated rows registered in timestamp indexes.
+- Bulk update preparation no longer mutates caller-owned objects and rejects a
+  batch containing multiple schema names.
+
 - **A failed TLS handshake no longer hangs the caller forever.** The handshake
   error listener cleared its own timeout without settling the promise, and a
   handshake that fails before `secureConnect` never reaches the code that

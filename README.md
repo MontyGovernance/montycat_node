@@ -452,6 +452,11 @@ const hits = await Sales.searchValues({
 `updateBulk` takes `vectors` for numeric keys plus `customVectors` for custom
 keys. `searchKeys` and `searchValues` accept a query vector in semantic mode.
 
+Serialized `Schema` values can be passed directly to `updateBulk`. Their
+`schema` property is transported as request metadata rather than stored as a
+document field, while nested `timestamps` metadata remains intact. Every value
+in one bulk update must use the same schema.
+
 **Embedding-space compatibility is required.** Every supplied record vector and
 query vector must be produced by the model enrolled for that keyspace, including
 the same model revision, preprocessing, pooling, and normalization. Matching the
