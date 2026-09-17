@@ -350,6 +350,9 @@ const status = await engine.getSemanticStatus({
   store: 'catalog',
   keyspace: 'products',
 });
+// After globally re-enabling semantic search, retry searches while
+// status.payload.reloading is true: retained indexes open in the background.
+// status.payload.indexing reports live and backfill queue depths.
 
 // Enable an unenrolled keyspace with an explicit model.
 await engine.enableSemanticSearch({
@@ -381,7 +384,8 @@ keyword mode, and a normalized `[0, 1]` RRF score in hybrid mode. Keyword
 scores have no fixed upper bound, so compare scores only within the same query
 and search mode. A hybrid score near `1.0` means strong agreement between both
 rankings; a top result found by only one branch is around `0.5`. `minScore`
-filters only the semantic branch.
+filters the final selected mode score before pagination. In hybrid mode this
+means the fused RRF score; keyword-only fallback hits are filtered too.
 
 ```typescript
 const matchingKeys = await Sales.searchKeys({
@@ -448,6 +452,11 @@ const hits = await Sales.searchValues({
 `updateBulk` takes `vectors` for numeric keys plus `customVectors` for custom
 keys. `searchKeys` and `searchValues` accept a query vector in semantic mode.
 
+Serialized `Schema` values can be passed directly to `updateBulk`. Their
+`schema` property is transported as request metadata rather than stored as a
+document field, while nested `timestamps` metadata remains intact. Every value
+in one bulk update must use the same schema.
+
 **Embedding-space compatibility is required.** Every supplied record vector and
 query vector must be produced by the model enrolled for that keyspace, including
 the same model revision, preprocessing, pooling, and normalization. Matching the
@@ -513,10 +522,10 @@ Tune it if you need to:
 pool: { maxIdle: 4, idleTimeoutMs: 15000 }     // defaults: 8, 30000
 ```
 
-**Pools are shared per `(host, port, useTls)`.** They live in a module-level registry,
+**Pools are shared per endpoint and TLS trust configuration.** They live in a module-level registry,
 not on the `Engine`, so two keyspace classes pointing at the same server share one pool
-rather than each opening its own. `useTls` is part of the key — a plaintext and a TLS
-connection to one address are not interchangeable.
+rather than each opening its own. The complete TLS configuration is part of the key, so
+plaintext, TLS, and connections using different certificate pins are never interchangeable.
 
 **Keep `maxIdle` modest.** An idle pooled connection still holds one of the engine's
 connection permits. The defaults are deliberately small; raise them only after measuring
@@ -572,10 +581,64 @@ const engine = new Engine({
 });
 ```
 
-> **Note.** The client sets `rejectUnauthorized: false`, so self-signed certificates are
-> accepted and the server identity is not verified. That is convenient for local and
-> internal deployments; terminate TLS at a trusted proxy where you need certificate
-> validation.
+On its own that encrypts the connection without checking who is on the other end,
+which is where this client has always stood. Encryption without verification stops
+passive eavesdropping but not an active attacker: anything that can sit in the path
+can present its own certificate and read or alter every request, credentials included.
+
+### Verifying the engine
+
+Verification is opt-in, and takes whichever form of trust material you have.
+
+**The engine's certificate, copied to the client host.** The certificate the engine
+presents must match this file exactly:
+
+```typescript
+const engine = new Engine({
+  // ...
+  useTls: true,
+  certificatePath: '/etc/montycat/server.crt',
+});
+```
+
+**Its SHA-256 fingerprint**, when passing a string is easier than shipping a file —
+a container image, an environment variable, a secrets manager:
+
+```sh
+openssl x509 -in server.crt -noout -fingerprint -sha256
+```
+
+```typescript
+const engine = new Engine({
+  // ...
+  useTls: true,
+  certificateFingerprint: process.env.MONTYCAT_CERT_FINGERPRINT,
+});
+```
+
+Either one implies verification — no second option needed. Both pin the same leaf
+certificate identity: a certificate file compares parsed DER bytes, while a fingerprint
+compares its SHA-256 digest. Pinning skips hostname checking because the engine's
+self-signed certificate carries only `localhost`, `127.0.0.1` and `::1` as subject
+alternative names unless it was regenerated with `init-self-tls dns/ip`. The
+comparison already answers the question a hostname check is a proxy for.
+
+**A certificate from a real CA**, for an engine behind a terminating proxy — no pin,
+so `rejectUnauthorized` applies with ordinary hostname checking:
+
+```typescript
+const engine = new Engine({ /* ... */ useTls: true, certificateVerification: true });
+```
+
+A certificate that does not match fails before any request byte is written, on the
+pooled and per-request paths alike. Following this client's convention the failure is
+*returned* as an error string rather than thrown, the same way every other connection
+error is here — and it names the fingerprint that actually arrived, so a regenerated
+certificate is a one-line fix.
+
+> **Note.** `certificateVerification` is off by default. Turning it on by default
+> would break every deployment using the engine's self-signed certificate, so the
+> choice is yours to make explicitly.
 
 ## 👥 Owners & Access
 

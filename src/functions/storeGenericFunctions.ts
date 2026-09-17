@@ -42,10 +42,14 @@ function processBulkKeysValues(bulkKeysValues: { [key: string]: any }): { [key: 
     const bulkKeysValuesProcessed: { [key: string]: any } = {};
 
     Object.keys(bulkKeysValues).forEach((key) => {
-        const entry = bulkKeysValues[key];
+        const originalEntry = bulkKeysValues[key];
+        const entry = originalEntry instanceof Pointer
+            ? originalEntry
+            : { ...originalEntry };
 
         if (entry instanceof Object) {
             const inner = entry as { [key: string]: any };
+            const processedKey = !isNaN(Number(key)) ? key : convertCustomKey(key);
 
             Object.keys(inner).forEach((prop) => {
                 const value = inner[prop];
@@ -55,11 +59,12 @@ function processBulkKeysValues(bulkKeysValues: { [key: string]: any }): { [key: 
             });
 
             if (entry instanceof Pointer) {
-                bulkKeysValues[key] = entry.setupPointer();
+                bulkKeysValuesProcessed[processedKey] = JSON.stringify(entry.setupPointer());
+                return;
             }
 
-            const processedKey = !isNaN(Number(key)) ? key : convertCustomKey(key);
-            bulkKeysValuesProcessed[processedKey] = JSON.stringify(bulkKeysValues[key]);
+            delete inner.schema;
+            bulkKeysValuesProcessed[processedKey] = JSON.stringify(inner);
         }
     });
 
@@ -101,6 +106,19 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
     const { processedValue, foundSchema } = processValue(value);
     const { processedBulkValues, uniqueSchema } = processBulkValues(bulkValues);
 
+    const updateSchemas = new Set<string>();
+    for (const entry of Object.values(bulkKeysValues)) {
+        const record = entry as Record<string, unknown> | null;
+        if (record && typeof record === 'object' && typeof record.schema === 'string') {
+            updateSchemas.add(record.schema);
+        }
+    }
+    if (updateSchemas.size > 1) {
+        throw new Error("Bulk values must have the same schema");
+    }
+    const updateSchema = updateSchemas.size === 1
+        ? updateSchemas.values().next().value
+        : null;
     const bulkKeysValuesProcessed = processBulkKeysValues(bulkKeysValues);
     const processedSearchCriteria = processSearchCriteria(searchCriteria);
 
@@ -125,15 +143,15 @@ function convertToBinaryQuery(cls: any, options: { [key: string]: any } = {}): s
         // plain string); every other command sends a JSON-encoded filter map.
         search_criteria: semanticQuery !== null ? semanticQuery : JSON.stringify(processedSearchCriteria),
         with_pointers: withPointers,
-        schema: foundSchema ? foundSchema : uniqueSchema ? uniqueSchema : schema,
+        schema: foundSchema ? foundSchema : uniqueSchema ? uniqueSchema : updateSchema ? updateSchema : schema,
         key_included: keyIncluded,
         pointers_metadata: pointersMetadata,
         volumes,
         latest_volume: latestVolume,
     };
 
-    // Only `semantic_search` honors min_score; omit it otherwise so the wire is
-    // unchanged for existing commands (the engine defaults the field to None).
+    // Search commands apply min_score to their final mode score before
+    // pagination; omit it when unset so existing wire payloads stay unchanged.
     if (minScore !== null) {
         queryDict.min_score = minScore;
     }
@@ -243,7 +261,7 @@ function processBulkValues(bulkValues: any[]) {
 async function runQuery(cls: any, query: string, callback?: (data: any) => void, subscribe = false): Promise<unknown> {
     const port = subscribe ? cls.port + 1 : cls.port;
     // Subscriptions are never pooled; sendData routes on that internally.
-    return sendData(cls.host, port, query, callback, cls.useTls, cls.pool);
+    return sendData(cls.host, port, query, callback, cls.useTls, cls.pool, cls.tls ?? null);
 }
 
 /**

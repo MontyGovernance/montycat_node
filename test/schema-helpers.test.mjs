@@ -123,6 +123,29 @@ test('processes bulk key values and rejects mixed bulk schemas', () => {
     }),
     /same schema/,
   );
+
+  const update = {
+    schema: 'Event',
+    timestamps: { modifiedAt: '2026-09-15 19:09:09' },
+  };
+  const query = JSON.parse(convertToBinaryQuery({
+    username: '', password: '', store: '', keyspace: '', command: 'update_bulk',
+  }, { bulkKeysValues: { 7: update } }));
+  assert.equal(query.schema, 'Event');
+  assert.deepEqual(JSON.parse(query.bulk_keys_values[7]), {
+    timestamps: { modifiedAt: '2026-09-15 19:09:09' },
+  });
+  assert.equal(update.schema, 'Event');
+
+  assert.throws(
+    () => convertToBinaryQuery({}, {
+      bulkKeysValues: {
+        1: { schema: 'One' },
+        2: { schema: 'Two' },
+      },
+    }),
+    /same schema/,
+  );
 });
 
 test('GenericKV rejects ambiguous and incomplete requests before networking', async () => {

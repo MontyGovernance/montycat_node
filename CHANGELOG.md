@@ -1,5 +1,82 @@
 # Changelog
 
+## 1.3.4 - 2026-09-10
+
+### Added
+
+- **Optional certificate verification.** `useTls` encrypts but does not check
+  who answers — the client set `rejectUnauthorized: false` unconditionally, so
+  an active attacker in the path could present its own certificate and read
+  every request, credentials included. `Engine` now accepts three new options:
+
+  - `certificatePath` — the engine's certificate, copied to the client host.
+    The certificate presented must match it byte for byte.
+  - `certificateFingerprint` — its SHA-256 digest, for deployments that would
+    rather pass a string than ship a file. Read one with
+    `openssl x509 -in server.crt -noout -fingerprint -sha256`.
+  - `certificateVerification` — verify against Node's trust store with ordinary
+    hostname checking, for an engine behind a proxy holding a CA-issued
+    certificate.
+
+  Either pin implies verification, so one option says one thing. Both skip
+  hostname checking: the engine's self-signed certificate names only
+  `localhost`, `127.0.0.1` and `::1` unless regenerated with
+  `init-self-tls dns/ip`, and comparing the certificate already answers
+  identity exactly. A pin is checked after the handshake rather than through
+  `rejectUnauthorized`, which answers "does this chain to a trusted root" — a
+  question a CA-signed impostor would pass.
+
+  The check runs on both socket paths, the per-request one and the pooled one,
+  and fails before any request byte is written. Following this client's
+  convention the failure is returned as an error string rather than thrown, and
+  names the fingerprint that arrived.
+
+  `TlsSettings` and `TlsVerificationError` are exported.
+
+- `Engine.fromUri` accepts a third argument carrying `useTls` and the
+  verification options, rather than always starting in plaintext.
+
+### Fixed
+
+- `updateBulk` now extracts the schema from serialized schema values and sends
+  it as request metadata, matching `insertBulk`. Nested `timestamps` metadata
+  is preserved, keeping updated rows registered in timestamp indexes.
+- Bulk update preparation no longer mutates caller-owned objects and rejects a
+  batch containing multiple schema names.
+
+- **A failed TLS handshake no longer hangs the caller forever.** The handshake
+  error listener cleared its own timeout without settling the promise, and a
+  handshake that fails before `secureConnect` never reaches the code that
+  attaches a socket error handler — so nothing could resolve it. Latent while
+  `rejectUnauthorized` was hardcoded false; verifying a self-signed engine hits
+  it on the first request. Found against a live engine, not in a unit test.
+
+  Subscriptions were affected the same way and are fixed with it. Three sites
+  skipped their `resolve` in subscription mode — the handshake timeout, the
+  handshake error, and the certificate check that runs after a *successful*
+  handshake — while `finalizeConnect`, the only other thing that settles a
+  subscription, is never reached in any of those cases. A subscriber now
+  receives a `Connection error: ...` string rather than waiting forever.
+
+  The guards that remain on `onEnd`, `onError` and `onTimeout` are correct and
+  untouched: those handlers are attached only after `finalizeConnect`, by which
+  point a subscription already holds its handle.
+
+### Changed
+
+- Connection pools are keyed by the whole TLS configuration rather than by an
+  on/off flag. A connection verified against a pinned certificate is never
+  handed to a caller that asked for different trust, or for none.
+- `getPool` takes the resolved TLS settings as a new fourth argument. Internal
+  to the package; it is not exported from `montycat`.
+
+### Unchanged
+
+- **`certificateVerification` defaults to off.** Existing TLS deployments keep
+  working exactly as before — turning verification on by default would break
+  every engine running its own self-signed certificate.
+
+
 ## 1.3.3 - 2026-09-02
 
 - Added the exported `SearchMode` enum, `searchKeys`, and `searchValues`, with optional
