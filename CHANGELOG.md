@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add `Persistent.updateCache()` so cache capacity can change without
+  resubmitting the immutable keyspace compression setting.
+
 ## 1.3.4 - 2026-09-10
 
 ### Added
