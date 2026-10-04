@@ -121,8 +121,10 @@ class Persistent extends GenericKV {
     }
 
     /**
-     * Updates the cache and compression settings for the persistent store.
-     * @param options - Optional cache (number) and compression (boolean) settings.
+     * Compatibility API for cache updates. Compression is immutable after
+     * keyspace creation and the supplied value must match the existing setting.
+     * Prefer updateCache when only cache capacity changes.
+     * Omitting compression performs a cache-only update.
      * @return A promise that resolves with the result of the update.
      */
     static async updateCacheAndCompression({ cache, compression }: { cache?: number; compression?: boolean } = {}): Promise<any> {
@@ -132,15 +134,33 @@ class Persistent extends GenericKV {
         }
 
         const cacheValue = cache !== undefined ? cache.toString() : "0";
-        const compressionValue = compression === true ? "y" : "n";
+        const raw = [
+                "update-cache-compression",
+                "store", this.store,
+                "keyspace", this.keyspace,
+                "cache", cacheValue
+            ];
+        if (compression !== undefined) raw.push("compression", compression ? "y" : "n");
+        const query = {
+            raw,
+            credentials: [this.username, this.password],
+        };
+        return await runQuery(this, JSON.stringify(query));
+    }
 
+    /**
+     * Updates cache capacity. Compression is immutable after keyspace creation.
+     */
+    static async updateCache({ cache }: { cache?: number } = {}): Promise<any> {
+        if (!this.persistent) {
+            throw new Error("Cache settings can only be updated for persistent keyspaces.");
+        }
         const query = {
             raw: [
                 "update-cache-compression",
                 "store", this.store,
                 "keyspace", this.keyspace,
-                "cache", cacheValue,
-                "compression", compressionValue
+                "cache", cache !== undefined ? cache.toString() : "0"
             ],
             credentials: [this.username, this.password],
         };

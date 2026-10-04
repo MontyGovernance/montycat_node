@@ -155,10 +155,14 @@ Sales.connectEngine(engine);
 Production.connectEngine(engine);
 
 // create keyspaces and store
-const res1 = await Sales.createKeyspace();
+const res1 = await Sales.createKeyspace({ cache: 128, compression: true });
 const res2 = await Production.createKeyspace();
 
 console.log('Keyspace creation results:', res1, res2);
+
+// Compression is chosen once, when a persistent keyspace is created.
+// Cache capacity is in MB and may be changed later without repeating it.
+await Sales.updateCache({ cache: 256 });
 
 // define data schemas (optional)
 
