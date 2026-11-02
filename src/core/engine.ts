@@ -390,11 +390,16 @@ class Engine {
    * @returns {Promise<unknown>} The server's response describing the enabled
    *                             model and enrolled keyspaces.
    *
+   * `cpuArena` is a persisted DB-wide allocator override (omit store/keyspace).
+   * False reduces idle memory at potentially lower indexing/query throughput;
+   * true retains the existing buffer-reuse behavior. Stored vectors are preserved.
    * An already-enrolled keyspace is not modified. Use
    * `reembedSemanticSearch` to change its model or field.
    */
-  async enableSemanticSearch({ model, field, store, keyspace }: { model?: SemanticModel; field?: string; store?: string; keyspace?: string } = {}): Promise<unknown> {
+  async enableSemanticSearch({ model, field, store, keyspace, cpuArena }: { model?: SemanticModel; field?: string; store?: string; keyspace?: string; cpuArena?: boolean } = {}): Promise<unknown> {
     if (keyspace && !store) throw new Error('A store is required when keyspace is specified');
+    if (cpuArena !== undefined && (store || keyspace)) throw new Error('cpuArena is a DB-wide setting; omit store and keyspace');
+    if (cpuArena !== undefined && typeof cpuArena !== 'boolean') throw new TypeError('cpuArena must be a boolean');
     const rawQuery: RawQuery = {
       raw: ['enable-semantic-search'],
       credentials: [this.username!, this.password!],
@@ -403,6 +408,7 @@ class Engine {
     if (field) rawQuery.raw.push('field', field);
     if (store) rawQuery.raw.push('store', store);
     if (keyspace) rawQuery.raw.push('keyspace', keyspace);
+    if (cpuArena !== undefined) rawQuery.raw.push('cpu-arena', String(cpuArena));
 
     return sendData(this.host!, this.port!, JSONbig.stringify(rawQuery), undefined, this.useTls, this.pool, this.tls);
   }

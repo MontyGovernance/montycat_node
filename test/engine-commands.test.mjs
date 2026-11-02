@@ -11,6 +11,19 @@ import {
   ValidPermissions,
 } from '../dist/core/engine.js';
 
+test('CPU arena settings preserve false and reject keyspace-scoped changes', async () => {
+  const requests = await withCapture(async (engine) => {
+    await engine.enableSemanticSearch({ cpuArena: false });
+    await engine.enableSemanticSearch({ cpuArena: true });
+    await assert.rejects(engine.enableSemanticSearch({ store: 'catalog', cpuArena: false }), /DB-wide/);
+    await assert.rejects(engine.enableSemanticSearch({ cpuArena: 'false' }), /boolean/);
+  });
+  assert.deepEqual(requests.map((request) => request.raw), [
+    ['enable-semantic-search', 'cpu-arena', 'false'],
+    ['enable-semantic-search', 'cpu-arena', 'true'],
+  ]);
+});
+
 async function withCapture(run) {
   const commands = [];
   const server = net.createServer((socket) => {
