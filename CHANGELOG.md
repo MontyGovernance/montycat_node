@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.6 - 2026-11-01
+
+### Added
+
+- Add optional `cpuArena` to `Engine.enableSemanticSearch()` for a
+  persisted, DB-wide CPU embedding allocator setting. The default remains
+  unchanged; `false` can reduce idle memory at an inference throughput cost.
+  Requires Montycat Semantic server 1.3.9 or newer.
+
 ## 1.3.5 - 2026-10-04
 
 ### Added
